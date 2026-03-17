@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <!-- SheetJS for Excel formatting and export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.materialdocs.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#136dec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101822",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+    <title>VitaDairy O2C AI Extractor</title>
+    <style>
+        @keyframes slide-in {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .animate-slide-in {
+            animation: slide-in 0.3s ease-out forwards;
+        }
+        /* Custom scrollbar for data grid */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+        }
+        /* Style for editable table cells */
+        [contenteditable="true"]:focus {
+            outline: 2px solid #136dec;
+            background-color: #f1f5f9;
+        }
+        .dark [contenteditable="true"]:focus {
+            background-color: #1e293b;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 h-screen w-full overflow-hidden flex flex-col">
+    
+    <!-- Toast Notification Manager -->
+    <div class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none" id="toast-container">
+        <!-- Toast Error -->
+        <div id="toastError" class="hidden flex items-center gap-3 bg-white dark:bg-slate-800 border-l-4 border-red-500 p-4 rounded shadow-lg pointer-events-auto animate-slide-in">
+            <span class="material-symbols-outlined text-red-500">error</span>
+            <div>
+                <p class="text-sm font-bold">Lỗi hệ thống</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400" id="toastErrorMsg">Vui lòng thử lại.</p>
+            </div>
+            <button onclick="document.getElementById('toastError').classList.add('hidden')" class="ml-auto text-slate-400 hover:text-slate-600">
+                <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+        </div>
+        
+        <!-- Toast Success -->
+        <div id="toastSuccess" class="hidden flex items-center gap-3 bg-white dark:bg-slate-800 border-l-4 border-emerald-500 p-4 rounded shadow-lg pointer-events-auto animate-slide-in">
+            <span class="material-symbols-outlined text-emerald-500">check_circle</span>
+            <div>
+                <p class="text-sm font-bold" id="toastSuccessTitle">Thành công</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400" id="toastSuccessMsg">Trích xuất dữ liệu hoàn tất.</p>
+            </div>
+            <button onclick="document.getElementById('toastSuccess').classList.add('hidden')" class="ml-auto text-slate-400 hover:text-slate-600">
+                <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- AI Config Modal (Ẩn mặc định) -->
+    <div id="aiConfigModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-in">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">settings_suggest</span>
+                    Cấu hình AI
+                </h3>
+                <button id="btnCloseAiConfig" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6 flex flex-col gap-6">
+                <!-- API Key Input -->
+                <div class="flex flex-col gap-2">
+                    <label class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 text-sm">
+                        <span class="material-symbols-outlined text-base text-slate-400">vpn_key</span> 
+                        Gemini API Key:
+                    </label>
+                    <input type="password" id="apiKeyInput" placeholder="Nhập API Key để chạy AI Tool..." class="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 dark:text-slate-100 font-mono text-sm transition-all focus:border-primary">
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 italic mt-1">*Bắt buộc phải nhập trước khi tải chứng từ/trích xuất dữ liệu.</p>
+                </div>
+                
+                <!-- Future AI Models Select -->
+                <div class="flex flex-col gap-2 opacity-50 cursor-not-allowed">
+                    <label class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 text-sm">
+                        <span class="material-symbols-outlined text-base text-slate-400">memory</span> 
+                        Phiên bản Model AI (Phase 2):
+                    </label>
+                    <select disabled class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/50 text-slate-500 cursor-not-allowed text-sm">
+                        <option>Gemini 2.5 Flash (Mặc định)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3">
+                <button id="btnCancelAiConfig" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors">Hủy</button>
+                <button id="btnSaveAiConfig" class="px-5 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-lg shadow-sm shadow-primary/20 transition-all active:scale-95">Lưu cấu hình</button>
+            </div>
+        </div>
+    </div>
+
+    <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3 sticky top-0 z-10 shrink-0">
+        <div class="flex items-center gap-4">
+            <div class="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
+                <span class="material-symbols-outlined text-2xl">neurology</span>
+            </div>
+            <div>
+                <h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold leading-tight tracking-tight">VitaDairy O2C AI Extractor</h2>
+                <p class="text-slate-500 dark:text-slate-400 text-xs">Phân hệ Trích xuất Đơn hàng Tự động</p>
+            </div>
+        </div>
+        <div class="flex flex-1 justify-end gap-4 items-center">
+            <nav class="hidden md:flex gap-6 mr-6">
+                <a class="text-sm font-medium text-primary border-b-2 border-primary pb-1" href="#">Dashboard</a>
+                <a class="text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200" href="#">Lịch sử trích xuất</a>
+                <button id="btnOpenAiConfig" class="text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">Cấu hình AI</button>
+            </nav>
+            <div class="flex gap-2">
+                <button class="flex items-center justify-center rounded-lg h-10 w-10 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors">
+                    <span class="material-symbols-outlined text-xl">notifications</span>
+                </button>
+                <button class="flex items-center justify-center rounded-lg h-10 w-10 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors">
+                    <span class="material-symbols-outlined text-xl">account_circle</span>
+                </button>
+            </div>
+            <div class="h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-700 bg-cover bg-center overflow-hidden border border-slate-200 dark:border-slate-700" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDPIrLDs1LoZbxZxQ-Hr2VtH7IgK6OvLA8_lRBxZ-_J4VMFkUe40hVXyQA-5O99_WnLsHzAcG7w9vj1_yhColmNIGgRIynI464QTLAJZG6NuYM2iUTybZwXj_xKd9usP_bp_yR9RjIIs1KMirilXljePXON_QD8CRu9LhcxgeaLjiX2VmA1BkkZSiN4c6mSd74Kq_8Rbj6exRfzl_yC_t7nXBWhoCUpvxQYKoho7_DztBg4kK5SCgno7c1qun6msNac4mcVEILwNw')">
+            </div>
+        </div>
+    </header>
+
+    <main class="flex flex-1 overflow-hidden">
+        <!-- Sidebar: Upload & Queue -->
+        <aside class="w-[260px] min-w-[260px] shrink-0 flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50">
+            <div class="p-5 flex flex-col gap-6 h-full min-h-0">
+                <div class="flex flex-col gap-1 shrink-0">
+                    <h1 class="text-lg font-black leading-tight tracking-tight text-slate-900 dark:text-slate-100">Quản lý Chứng từ</h1>
+                </div>
+
+                <!-- DRAG N DROP UPLOAD AREA -->
+                <input type="file" id="fileInput" class="hidden" accept=".pdf,image/*,.xlsx,.xls" multiple>
+                <div id="uploadArea" class="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-4 py-8 text-center group cursor-pointer hover:border-primary transition-all">
+                    <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <span class="material-symbols-outlined text-2xl" id="uploadIcon">upload_file</span>
+                    </div>
+                    <div>
+                        <p class="text-slate-900 dark:text-slate-100 text-sm font-bold" id="uploadText">Tải chứng từ (Kéo thả)</p>
+                        <p class="text-slate-500 dark:text-slate-400 text-[10px] mt-1">(Tối đa 10 files. PDF, PNG, JPG)</p>
+                    </div>
+                    <button id="btnUpload" class="mt-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg hover:shadow-sm transition-all pointer-events-none">
+                        Chọn tệp
+                    </button>
+                </div>
+
+                <!-- File Queue List -->
+                <div class="flex flex-col gap-3 min-h-0 flex-1">
+                    <div class="flex items-center justify-between shrink-0">
+                        <h3 class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Hàng đợi (<span id="queueCount">0</span>/10)</h3>
+                        <button id="btnClearAll" class="text-[11px] text-slate-500 font-medium hover:text-red-500 transition-colors">Xóa tất cả</button>
+                    </div>
+                    
+                    <div id="fileQueue" class="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-2 pb-2">
+                        <!-- Dynamic Queue Items will be placed here -->
+                        <p class="text-xs text-slate-500 italic text-center py-4" id="emptyQueueMsg">Chưa có chứng từ nào diễn ra.</p>
+                    </div>
+
+                    <!-- Cost Tracker UI -->
+                    <div id="costTracker" class="mt-auto p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
+                        <div class="flex flex-col gap-1.5">
+                            <div class="flex justify-between items-center text-[10px] text-slate-500">
+                                <span class="uppercase tracking-wider font-bold">Tổng thời gian</span>
+                                <span id="totalTimeLabel" class="font-black text-[11px] text-slate-700 dark:text-slate-300">0s</span>
+                            </div>
+                            <div class="flex justify-between items-center text-[10px] text-slate-500">
+                                <span class="uppercase tracking-wider font-bold">API Phí (Ước tính)</span>
+                                <span id="totalCostLabel" class="font-black text-[11px] text-emerald-600 dark:text-emerald-400">0 VNĐ</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content: Horizontal Split Preview & Data -->
+        <section class="flex-1 flex flex-col bg-background-light dark:bg-background-dark overflow-hidden">
+            <!-- Header Action Bar -->
+            <div class="px-4 py-2 flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+                <div class="flex flex-col gap-0.5">
+                    <h2 class="text-lg font-black leading-tight tracking-tight text-slate-900 dark:text-slate-100">Kiểm tra &amp; Đối soát Dữ liệu</h2>
+                    <div class="flex items-center gap-2" id="docInfoLabel">
+                        <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                            Chưa chọn tệp
+                        </span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 mr-2 opacity-70 cursor-not-allowed group relative" title="Tính năng đang phát triển trong Phase 2">
+                        <p class="text-slate-900 dark:text-slate-100 text-[11px] font-bold">Tự động Email</p>
+                        <div class="relative inline-flex h-4 w-7 shrink-0 rounded-full border-2 border-transparent bg-slate-300 dark:bg-slate-600">
+                            <span class="inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0"></span>
+                        </div>
+                    </div>
+
+                    <!-- Trigger Extraction Button -->
+                    <button id="btnExtract" class="flex items-center justify-center gap-2 px-3 py-1.5 text-sm rounded-md bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <span class="material-symbols-outlined text-[16px] animate-pulse" id="extractIcon">auto_awesome</span>
+                        <span id="extractBtnText">Trích xuất AI</span>
+                    </button>
+
+                    <div class="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+                    <button id="btnExportExcel" class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors shadow-sm focus:ring-2 focus:ring-emerald-400">
+                        <span class="material-symbols-outlined text-[16px]">border_outer</span>
+                        Xuất Excel
+                    </button>
+                    <button id="btnSyncSAP" class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-colors shadow-sm focus:ring-2 focus:ring-indigo-400">
+                        <span class="material-symbols-outlined text-[16px]">sync</span>
+                        Đồng bộ SAP
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 flex overflow-hidden">
+                <!-- Center: Document Preview -->
+                <div class="w-[40%] border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50 dark:bg-slate-900/30 overflow-hidden">
+                    <div class="flex items-center justify-between px-4 py-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+                        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Bản xem trước</span>
+                        <div class="flex items-center gap-2">
+                            <button class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+                            <button class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500"><span class="material-symbols-outlined text-sm">zoom_out</span></button>
+                            <button class="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500"><span class="material-symbols-outlined text-sm">refresh</span></button>
+                        </div>
+                    </div>
+                    <div class="flex-1 p-4 flex flex-col items-center justify-center overflow-auto custom-scrollbar bg-slate-100 dark:bg-slate-800" id="previewContainer">
+                        <p class="text-sm font-medium text-slate-400">Chọn một tệp bên trái để xem trước bản gốc.</p>
+                        <!-- Image Preview will be injected here -->
+                    </div>
+                </div>
+
+                <!-- Right: Data Grid -->
+                <div class="flex-1 overflow-hidden bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800">
+                    <div class="w-full h-full overflow-auto custom-scrollbar">
+                        <table id="dataTable" class="w-max min-w-[2500px] text-left border-collapse table-fixed bg-white dark:bg-slate-900">
+                            <thead class="sticky top-0 z-20 shadow-sm backdrop-blur-md">
+                                <tr class="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700" id="trHeaderGroup">
+                                    <th class="px-4 py-2 text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-[0.2em] border-r border-slate-200 dark:border-slate-700 bg-blue-50 dark:bg-blue-900/30" colspan="3">Traceability (UI Only)</th>
+                                    <th class="px-4 py-2 text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] bg-emerald-50 dark:bg-emerald-900/30" colspan="38">SAP Standard Columns (Exportable)</th>
+                                </tr>
+                                <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800" id="trHeadersRow">
+                                    <!-- Dynamic Details Headers Mapped from EXACT_EXCEL_HEADERS -->
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                                <!-- Trống mặc định -->
+                                <tr class="h-full">
+                                    <td class="p-10 text-center" colspan="41">
+                                        <p class="text-sm text-slate-500 font-medium">Chưa có dữ liệu trích xuất. Hãy dán API Key và Tải mẫu lên.</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <footer class="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500" id="statusDot"></div>
+                        <span class="text-xs text-slate-500 dark:text-slate-400 font-medium" id="statusLabel">Hệ thống Trích xuất Sẵn sàng</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">AI Model: Gemini 2.5 Flash</span>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-400 dark:text-slate-500">
+                    © 2026 VitaDairy Enterprise AI
+                </div>
+            </footer>
+        </section>
+    </main>
+
+    <!-- ===== LOGIC JAVASCRIPT ===== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // EXACT_EXCEL_HEADERS từ yêu cầu của User
+            const EXACT_EXCEL_HEADERS = [
+                "Date Ngày PO", "SaleOrder ID", "Order Type", "Sale Org", "Dist. Channel", "Division",
+                "Sold-to (Pháp nhân)", "Ship-to (ĐC giao hàng)", "Cust. Reference (Số PO)", "Material",
+                "BarCode Mã vạch", "Tên Sku", "Order Quantity", "Unit", "Plant", "Sloc", "Batch. No",
+                "Billing line note (HDDT)", "Sale Employee", "WBS Element", "Người mua hàng", "MÃ số thuế",
+                "Đơn vị mua hàng", "Địa chỉ", "Mã số thuế ", "Sales document notes", "Delivery document notes",
+                "Billing document notes (HDDT)", "Mã vận đơn", "Link file vận đơn", "Ghi chú DVKH header",
+                "Ngày YC giao hàng DD/MM/YYYY", "Lý do hủy đơn", "Sale Org ", "Sale Office", "Số điện thoại",
+                "Người nhận hàng", "Địa chỉ giao hàng", "Thời gian xử lý (Giây)"
+            ];
+            
+            // 3 Cột Traceability UI Only
+            const UI_HEADERS = ["Source File", "Page", "Status"];
+            const ALL_HEADERS = [...UI_HEADERS, ...EXACT_EXCEL_HEADERS];
+
+            // Map Width Column Class để giao diện table hiển thị đẹp
+            const colWidths = {
+                "Source File": "min-w-[150px]",
+                "Page": "min-w-[80px] text-center",
+                "Status": "min-w-[100px]",
+                "Plant": "min-w-[80px]",
+                "Sloc": "min-w-[80px]",
+                "Unit": "min-w-[100px]",
+                "Sold-to (Pháp nhân)": "min-w-[250px]",
+                "Ship-to (ĐC giao hàng)": "min-w-[250px]",
+                "Tên Sku": "min-w-[250px]",
+                "Địa chỉ": "min-w-[250px]",
+                "Địa chỉ giao hàng": "min-w-[250px]",
+                "Sales document notes": "min-w-[250px]",
+                "Delivery document notes": "min-w-[250px]",
+                "Billing document notes (HDDT)": "min-w-[250px]",
+                "Lý do hủy đơn": "min-w-[250px]",
+                "Link file vận đơn": "min-w-[200px]",
+                "Thời gian xử lý (Giây)": "min-w-[150px] text-center font-mono"
+            };
+
+            // Render Table Header Row (Chi tiết)
+            const trHeadersRow = document.getElementById('trHeadersRow');
+            ALL_HEADERS.forEach(header => {
+                const th = document.createElement('th');
+                // Format chuẩn: padding px-4 py-3, whitespace-nowrap chống rớt dòng chữ
+                const widthCls = colWidths[header] || "min-w-[150px]";
+                th.className = `${widthCls} px-4 py-3 text-[11px] font-bold text-slate-500 uppercase border-r border-b border-slate-200 dark:border-slate-800 whitespace-nowrap bg-slate-50 dark:bg-slate-900`;
+                
+                if (UI_HEADERS.includes(header)) {
+                    th.classList.replace('text-slate-500', 'text-blue-700');
+                    th.classList.add('bg-blue-50', 'dark:bg-blue-900/10');
+                }
+                
+                th.textContent = header;
+                trHeadersRow.appendChild(th);
+            });
+
+            // --- 0. UI MODAL LCOIG ---
+            const aiConfigModal = document.getElementById('aiConfigModal');
+            
+            function toggleAiConfigModal(show) {
+                if(show) {
+                    aiConfigModal.classList.remove('hidden');
+                } else {
+                    aiConfigModal.classList.add('hidden');
+                }
+            }
+
+            document.getElementById('btnOpenAiConfig').addEventListener('click', () => toggleAiConfigModal(true));
+            document.getElementById('btnCloseAiConfig').addEventListener('click', () => toggleAiConfigModal(false));
+            document.getElementById('btnCancelAiConfig').addEventListener('click', () => toggleAiConfigModal(false));
+            
+            document.getElementById('btnSaveAiConfig').addEventListener('click', () => {
+                const ky = document.getElementById('apiKeyInput').value.trim();
+                if(!ky) {
+                    showToast('error', 'Vui lòng nhập API Key trước khi lưu.');
+                    return;
+                }
+                toggleAiConfigModal(false);
+                showToast('success', 'Đã lưu cấu hình API Key hệ thống.', 'Ai Config');
+            });
+            
+            // Đóng Modal khi click ngoài vùng nền
+            aiConfigModal.addEventListener('click', (e) => {
+                if(e.target === aiConfigModal) toggleAiConfigModal(false);
+            });
+
+            // State & Elements
+            let fileQueueData = [];
+            let currentPreviewId = null;
+            window.currentExtractedData = []; // Lưu trữ gộp data của MỌI file
+            window.totalProcessTime = 0;
+            window.totalApiCostVND = 0;
+            
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const btnExtract = document.getElementById('btnExtract');
+            const fileQueue = document.getElementById('fileQueue');
+            const emptyQueueMsg = document.getElementById('emptyQueueMsg');
+            const queueCountLabel = document.getElementById('queueCount');
+            const btnClearAll = document.getElementById('btnClearAll');
+            const previewContainer = document.getElementById('previewContainer');
+            const tableBody = document.getElementById('tableBody');
+            
+            // --- 1. UPLOAD LOGIC ---
+            uploadArea.addEventListener('click', () => fileInput.click());
+            
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('border-primary', 'bg-primary/10');
+            });
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('border-primary', 'bg-primary/10');
+            });
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('border-primary', 'bg-primary/10');
+                if (e.dataTransfer.files.length > 0) {
+                    handleFilesSelection(e.dataTransfer.files);
+                }
+            });
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFilesSelection(e.target.files);
+                }
+                e.target.value = ''; // Reset input để chọn lại cùng file
+            });
+
+            btnClearAll.addEventListener('click', () => {
+                fileQueueData.forEach(f => URL.revokeObjectURL(f.objUrl));
+                fileQueueData = [];
+                window.currentExtractedData = [];
+                window.totalProcessTime = 0;
+                window.totalApiCostVND = 0;
+                document.getElementById('totalTimeLabel').innerText = "0s";
+                document.getElementById('totalCostLabel').innerText = "0 VNĐ";
+                currentPreviewId = null;
+                renderFileQueue();
+                renderTable([]); // Rỗng bảng
+            });
+
+            async function handleFilesSelection(files) {
+                if(fileQueueData.length + files.length > 10) {
+                    showToast('error', 'Chỉ hỗ trợ xử lý cùng lúc tối đa 10 tài liệu.');
+                    return;
+                }
+                
+                for(let i=0; i<files.length; i++) {
+                    const file = files[i];
+                    const id = Date.now().toString(36) + Math.random().toString(36).substring(2);
+                    const objUrl = URL.createObjectURL(file);
+                    
+                    // Add pending status immediately
+                    fileQueueData.push({
+                        id, file, objUrl,
+                        base64: null, // sẽ load sau
+                        status: 'pending',
+                        extractedData: null,
+                        errorMsg: null
+                    });
+                }
+                
+                renderFileQueue();
+                if(fileQueueData.length > 0 && !currentPreviewId) {
+                    previewFile(fileQueueData[0].id);
+                }
+                
+                // Load base64 trong background
+                for(let item of fileQueueData) {
+                    if(!item.base64) {
+                        try { item.base64 = await fileToBase64(item.file); } catch(e) { console.error('Error reading base64', e); }
+                    }
+                }
+                btnExtract.disabled = false;
+            }
+
+            function renderFileQueue() {
+                queueCountLabel.innerText = fileQueueData.length;
+                if(fileQueueData.length === 0) {
+                    fileQueue.innerHTML = '';
+                    emptyQueueMsg.classList.remove('hidden');
+                    previewContainer.innerHTML = '<p class="text-sm font-medium text-slate-400">Chọn một tệp bên trái để xem trước bản gốc.</p>';
+                    document.getElementById('docInfoLabel').innerHTML = '<span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400">Chưa chọn tệp</span>';
+                    currentPreviewId = null;
+                    btnExtract.disabled = true;
+                    return;
+                }
+                
+                emptyQueueMsg.classList.add('hidden');
+                fileQueue.innerHTML = '';
+                
+                fileQueueData.forEach(item => {
+                    const isSelected = item.id === currentPreviewId;
+                    const div = document.createElement('div');
+                    div.className = `flex flex-col gap-1 p-2 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-primary/5 border-primary dark:bg-primary/10' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-primary/50'}`;
+                    div.onclick = () => previewFile(item.id);
+                    
+                    let statusIcon = 'hourglass_empty';
+                    let statusColor = 'text-amber-500';
+                    let statusClass = 'animate-pulse';
+                    let statusText = 'Đang đợi';
+                    
+                    if(item.status === 'processing') {
+                        statusIcon = 'sync'; statusColor = 'text-blue-500'; statusClass = 'animate-spin'; statusText = 'Đang AI...';
+                    } else if(item.status === 'success') {
+                        statusIcon = 'check_circle'; statusColor = 'text-emerald-500'; statusClass = ''; statusText = 'Hoàn thành';
+                    } else if(item.status === 'error') {
+                        statusIcon = 'error'; statusColor = 'text-red-500'; statusClass = ''; statusText = 'Lỗi';
+                    }
+
+                    div.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-slate-400 text-lg">description</span>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-xs font-medium text-slate-700 dark:text-slate-200 truncate" title="${item.file.name}">${item.file.name}</p>
+                                <p class="text-[9px] text-slate-400">${(item.file.size / 1024).toFixed(1)} KB</p>
+                            </div>
+                            <button onclick="event.stopPropagation(); removeFile('${item.id}')" class="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"><span class="material-symbols-outlined text-[16px]">delete</span></button>
+                        </div>
+                        <div class="flex items-center justify-between px-1">
+                            <span class="text-[10px] text-slate-500 font-medium">${statusText}</span>
+                            <span class="material-symbols-outlined ${statusColor} text-[14px] ${statusClass}" title="${item.errorMsg || ''}">${statusIcon}</span>
+                        </div>
+                    `;
+                    fileQueue.appendChild(div);
+                });
+            }
+
+            window.previewFile = function(id) {
+                currentPreviewId = id;
+                renderFileQueue(); // update border highlight
+                const item = fileQueueData.find(f => f.id === id);
+                if(!item) return;
+
+                let previewHTML = '';
+                if(item.file.type.startsWith('image/')) {
+                    previewHTML = `<img src="${item.objUrl}" class="max-w-full max-h-full object-contain rounded drop-shadow-md">`;
+                } else if(item.file.type === 'application/pdf') {
+                    previewHTML = `<iframe src="${item.objUrl}#toolbar=0" class="w-full h-full border-0 rounded bg-white dark:bg-slate-800 shadow-sm" title="Bản xem trước PDF"></iframe>`;
+                } else {
+                    previewHTML = `<p class="text-xs">Không có bản xem trước cho định dạng này.</p>`;
+                }
+                previewContainer.innerHTML = previewHTML;
+                document.getElementById('docInfoLabel').innerHTML = `
+                    <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400 truncate max-w-[300px]" title="${item.file.name}">
+                        ${item.file.name}
+                    </span>
+                `;
+            };
+
+            window.removeFile = function(id) {
+                const itemIndex = fileQueueData.findIndex(f => f.id === id);
+                if(itemIndex > -1) {
+                    URL.revokeObjectURL(fileQueueData[itemIndex].objUrl);
+                    fileQueueData.splice(itemIndex, 1);
+                }
+                
+                // Re-calculate global table data
+                window.currentExtractedData = [];
+                fileQueueData.forEach(f => {
+                    if(f.extractedData) window.currentExtractedData = window.currentExtractedData.concat(f.extractedData);
+                });
+                renderTable(window.currentExtractedData);
+
+                if(currentPreviewId === id) {
+                    currentPreviewId = null;
+                }
+                renderFileQueue();
+                if(fileQueueData.length > 0 && !currentPreviewId) previewFile(fileQueueData[0].id);
+            };
+
+            function fileToBase64(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = error => reject(error);
+                });
+            }
+
+            // Toast helper
+            function showToast(type, msg, title=null) {
+                if(type === 'error'){
+                    document.getElementById('toastErrorMsg').innerText = msg;
+                    document.getElementById('toastError').classList.remove('hidden');
+                    setTimeout(() => document.getElementById('toastError').classList.add('hidden'), 5000);
+                } else {
+                    document.getElementById('toastSuccessMsg').innerText = msg;
+                    if(title) document.getElementById('toastSuccessTitle').innerText = title;
+                    document.getElementById('toastSuccess').classList.remove('hidden');
+                    setTimeout(() => document.getElementById('toastSuccess').classList.add('hidden'), 5000);
+                }
+            }
+
+            // --- 2. EXTRACTION LOGIC (GEMINI) ---
+            btnExtract.addEventListener('click', async () => {
+                const apiKey = document.getElementById('apiKeyInput').value.trim();
+                if (!apiKey) {
+                    showToast('error', "Không tìm thấy API Key. Xin vui lòng cài đặt trong mục Cấu hình AI góc trên bên phải màn hình.");
+                    toggleAiConfigModal(true);
+                    return;
+                }
+                
+                const pendingFiles = fileQueueData.filter(f => f.status === 'pending' || f.status === 'error');
+                if (pendingFiles.length === 0) {
+                    showToast('error', "Không có chứng từ nào chờ trích xuất.");
+                    return;
+                }
+
+                // UI Loading state
+                const extractIcon = document.getElementById('extractIcon');
+                const extractBtnText = document.getElementById('extractBtnText');
+                const oldIcon = extractIcon.innerText;
+                const oldText = extractBtnText.innerText;
+                
+                extractBtnText.innerText = "Đang trích xuất...";
+                extractIcon.innerText = "sync";
+                extractIcon.classList.add('animate-spin');
+                btnExtract.disabled = true;
+
+                tableBody.innerHTML = `
+                    <tr class="h-64">
+                        <td colspan="41" class="text-center bg-blue-50/10">
+                            <div class="flex flex-col items-center justify-center gap-3">
+                                <span class="material-symbols-outlined text-4xl text-primary animate-spin">cyclone</span>
+                                <p class="text-primary font-bold animate-pulse">Hệ thống đang chạy AI duyệt chứng từ...</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+
+                for (let i = 0; i < pendingFiles.length; i++) {
+                    const item = pendingFiles[i];
+                    item.status = 'processing';
+                    renderFileQueue();
+                    
+                    // Force UI to show document preview of processing file safely
+                    if(currentPreviewId !== item.id) previewFile(item.id);
+
+                    const startTime = performance.now();
+                    try {
+                        const { jsonData, usageMetadata } = await extractDataWithGemini(item.file.name, item.file.type, item.base64, apiKey);
+                        
+                        const endTime = performance.now();
+                        const processTime = ((endTime - startTime) / 1000).toFixed(2);
+                        
+                        let fileCostVND = 0;
+                        if(usageMetadata) {
+                            const inputCost = (usageMetadata.promptTokenCount / 1000000) * 0.075;
+                            const outputCost = (usageMetadata.candidatesTokenCount / 1000000) * 0.30;
+                            fileCostVND = (inputCost + outputCost) * 25500;
+                        }
+
+                        // Add property to all rows inside jsonData
+                        jsonData.forEach(row => {
+                            row["Thời gian xử lý (Giây)"] = processTime;
+                        });
+
+                        item.extractedData = jsonData;
+                        item.status = 'success';
+                        
+                        // Update globals tracking
+                        window.totalProcessTime += parseFloat(processTime);
+                        window.totalApiCostVND += fileCostVND;
+                        
+                        // Update UI Realtime
+                        document.getElementById('totalTimeLabel').innerText = window.totalProcessTime.toFixed(2) + "s";
+                        document.getElementById('totalCostLabel').innerText = Math.round(window.totalApiCostVND).toLocaleString('vi-VN') + " VNĐ";
+
+                        showToast('success', `Bóc tách thành công [${item.file.name}] (${jsonData.length} dòng).`);
+                    } catch (error) {
+                        console.error("Extraction error:", item.file.name, error);
+                        item.status = 'error';
+                        item.errorMsg = error.message;
+                        showToast('error', `Lỗi [${item.file.name}]: ${error.message}`);
+                    }
+                    
+                    // Re-calculate global data cumulative
+                    window.currentExtractedData = [];
+                    fileQueueData.forEach(f => {
+                        if(f.extractedData) window.currentExtractedData = window.currentExtractedData.concat(f.extractedData);
+                    });
+                    renderTable(window.currentExtractedData);
+                    renderFileQueue();
+                }
+
+                extractBtnText.innerText = oldText;
+                extractIcon.innerText = oldIcon;
+                extractIcon.classList.remove('animate-spin');
+                btnExtract.disabled = false;
+                
+                if(window.currentExtractedData.length === 0) {
+                     tableBody.innerHTML = `
+                        <tr class="h-full">
+                            <td class="p-10 text-center" colspan="41">
+                                <p class="text-sm text-slate-500 font-bold">Không có dữ liệu thành công nào được trích xuất.</p>
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+
+            async function extractDataWithGemini(fileName, mimeType, base64Data, apiKey) {
+                // Determine model
+                const listModelsUrl = "https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey;
+                const listResp = await fetch(listModelsUrl);
+                if (!listResp.ok) throw new Error("API Key bị lỗi hoặc quá hạn (400 Bad Request).");
+                const listData = await listResp.json();
+                
+                // Force target to gemini-2.5-flash as the primary fast parser
+                let targetModel = { name: "models/gemini-2.5-flash" };
+
+                console.log("Using model:", targetModel.name);
+
+                // Construct Exact SAP JSON Output Keys Template
+                const OutputJSONFormatObj = {};
+                EXACT_EXCEL_HEADERS.forEach(k => OutputJSONFormatObj[k] = "");
+
+                const promptText = `BẠN LÀ CHUYÊN GIA NHẬP LIỆU SAP S/4HANA NGÀNH FMCG. BÓC TÁCH CHỨNG TỪ THEO 5 LUẬT NGHIÊM NGẶT QUA JSON:
+
+1. CHUẨN HÓA NGÀY THÁNG (STRICT DATE): 
+- Mọi cột ngày (Ngày YC giao hàng DD/MM/YYYY, Date Ngày PO...) BẮT BUỘC định dạng "DD/MM/YYYY". 
+- (Ví dụ: 08/02/26 phải xuất ra "08/02/2026").
+- Lọc bỏ phần giờ phút: Nếu chứng từ ghi "02/02/26 14:23", chỉ lấy "02/02/2026".
+
+2. CHỐNG NHẢY SỐ MŨ EXCEL (SCIENTIFIC NOTATION):
+- Các cột: SaleOrder ID, Cust. Reference (Số PO), BarCode Mã vạch.
+- BẮT BUỘC thêm một dấu nháy đơn (') vào NGAY TRƯỚC chuỗi số. (Ví dụ: '2605053866795).
+
+3. LÀM SẠCH KÝ TỰ OCR (CLEAN TEXT):
+- Tự sửa lỗi quang học vô lý trên Tên SKU (vd: "80aGk" -> "800G"). Bỏ ký tự rác.
+
+4. LUẬT TÁCH DÒNG FMCG:
+- Hàng bán: Sloc='O1B1'. 
+- Hàng tặng (Free Qty): Nếu có hàng khuyến mãi, BẮT BUỘC sinh ra 1 object riêng, Sloc='O1KM', và nối thêm " - Hàng KM" vào Tên Sku.
+
+5. ZERO HALLUCINATION:
+- Trả về JSON Array. Trong đó gộp 3 cột UI (Source File, Page, Status="Extracted") vào lúc xuất.
+Dưới đây là Khung JSON Key YÊU CẦU:
+[
+    {
+        "Source File": "${fileName}",
+        "Page": 1,
+        "Status": "Extracted",
+        "Date Ngày PO": "",
+        "SaleOrder ID": "",
+        "Order Type": "",
+        "Sale Org": "1000",
+        "Dist. Channel": "10",
+        "Division": "",
+        "Sold-to (Pháp nhân)": "",
+        "Ship-to (ĐC giao hàng)": "",
+        "Cust. Reference (Số PO)": "",
+        "Material": "",
+        "BarCode Mã vạch": "",
+        "Tên Sku": "",
+        "Order Quantity": 0,
+        "Unit": "",
+        "Plant": "V001",
+        "Sloc": "",
+        "Batch. No": "",
+        "Billing line note (HDDT)": "",
+        "Sale Employee": "",
+        "WBS Element": "",
+        "Người mua hàng": "",
+        "MÃ số thuế": "",
+        "Đơn vị mua hàng": "",
+        "Địa chỉ": "",
+        "Mã số thuế ": "",
+        "Sales document notes": "",
+        "Delivery document notes": "",
+        "Billing document notes (HDDT)": "",
+        "Mã vận đơn": "",
+        "Link file vận đơn": "",
+        "Ghi chú DVKH header": "",
+        "Ngày YC giao hàng DD/MM/YYYY": "",
+        "Lý do hủy đơn": "",
+        "Sale Org ": "",
+        "Sale Office": "",
+        "Số điện thoại": "",
+        "Người nhận hàng": "",
+        "Địa chỉ giao hàng": ""
+    }
+]`;
+
+                let url = "https://generativelanguage.googleapis.com/v1beta/" + targetModel.name + ":generateContent?key=" + apiKey;
+                
+                let response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: promptText },
+                                { inline_data: { mime_type: mimeType, data: base64Data } }
+                            ]
+                        }],
+                        generationConfig: {
+                            temperature: 0.1, 
+                            responseMimeType: "application/json"
+                        }
+                    })
+                });
+
+                if (response.status === 429 || response.status === 404) {
+                    console.log("Gemini 2.5 Flash failed (404/429) -> Falling back to Gemini 1.5 Flash Stable");
+                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+                    response = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [
+                                    { text: promptText },
+                                    { inline_data: { mime_type: mimeType, data: base64Data } }
+                                ]
+                            }],
+                            generationConfig: {
+                                temperature: 0.1, 
+                                responseMimeType: "application/json"
+                            }
+                        })
+                    });
+                }
+
+                if (!response.ok) {
+                    const errRes = await response.text();
+                    throw new Error("API Error " + response.status + ": " + errRes);
+                }
+
+                const data = await response.json();
+                const rawText = data.candidates[0].content.parts[0].text;
+                const jsonStr = rawText.replace(/```json|```/g, '').trim();
+                return {
+                    jsonData: JSON.parse(jsonStr),
+                    usageMetadata: data.usageMetadata
+                };
+            }
+
+            // --- 3. RENDER TABLE ---
+            function renderTable(dataArray) {
+                tableBody.innerHTML = '';
+                window.currentExtractedData = dataArray; 
+
+                if (!Array.isArray(dataArray) || dataArray.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="41" class="text-center p-8 text-slate-500">AI Không xuất ra được dữ liệu nào.</td></tr>`;
+                    return;
+                }
+
+                dataArray.forEach((rowObj, index) => {
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-primary/5 transition-colors group";
+                    
+                    ALL_HEADERS.forEach(key => {
+                        const td = document.createElement('td');
+                        td.className = "px-4 py-3 text-xs text-slate-600 dark:text-slate-400 border-r border-b border-slate-200 dark:border-slate-800 outline-none whitespace-nowrap truncate max-w-[300px]";
+                        
+                        let displayVal = (rowObj[key] !== undefined && rowObj[key] !== null) ? rowObj[key] : '';
+                        
+                        if (UI_HEADERS.includes(key)) {
+                            td.classList.add('bg-slate-50/50', 'dark:bg-slate-800/20');
+                            if(key === "Status" && displayVal === "Extracted") {
+                                td.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 uppercase tracking-tighter">${displayVal}</span>`;
+                            } else {
+                                if(key==="Page") td.classList.add('text-center', 'font-bold');
+                                td.innerText = displayVal;
+                            }
+                        } else {
+                            td.setAttribute('contenteditable', 'true');
+                            td.classList.add('focus:bg-white', 'dark:focus:bg-slate-800');
+                            if(key === "Order Quantity" || key.includes("ID") || key === "Sale Org" || key === "Dist. Channel") {
+                                td.classList.add('font-bold', 'text-slate-900', 'dark:text-slate-100');
+                            }
+                            td.innerText = displayVal;
+                            
+                            // Realtime Edit Binding
+                            td.addEventListener('input', function() {
+                                rowObj[key] = this.innerText;
+                            });
+                        }
+                        tr.appendChild(td);
+                    });
+                    tableBody.appendChild(tr);
+                });
+            }
+
+            // --- 4. EXPORT EXCEL ---
+            document.getElementById('btnExportExcel').addEventListener('click', () => {
+                const exportDataList = window.currentExtractedData;
+                if (!exportDataList || exportDataList.length === 0) {
+                    showToast('error', 'Chưa có dữ liệu để xuất Excel!');
+                    return;
+                }
+
+                // Delete UI Columns
+                const cleanedData = exportDataList.map(row => {
+                    const newRow = { ...row };
+                    delete newRow['Source File'];
+                    delete newRow['Page'];
+                    delete newRow['Status'];
+                    return newRow;
+                });
+                
+                // Config
+                const newWorksheet = XLSX.utils.json_to_sheet(cleanedData, { 
+                    header: EXACT_EXCEL_HEADERS,
+                    raw: false, 
+                    dateNF: "dd/mm/yyyy"
+                });
+                
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, newWorksheet, "SAP Data");
+
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const fileName = `VitaDairy_O2C_Export_${timestamp}.xlsx`;
+                
+                XLSX.writeFile(workbook, fileName);
+                showToast('success', `Đã xuất Tệp ${fileName}`, 'Thực thi xuất Excel');
+            });
+
+            // Dummy Buttons
+            document.getElementById('btnSyncSAP').addEventListener('click', () => {
+                showToast('error', 'Tính năng đang phát triển trong Phase 2');
+            });
+        });
+    </script>
+</body>
+</html>
