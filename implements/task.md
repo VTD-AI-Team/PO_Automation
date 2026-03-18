@@ -12,4 +12,13 @@
 - [x] Implement Batch Multi-File Upload Queue (up to 10 files)
 - [x] Sequential AI processing on Batch Queue files
 - [x] Tối ưu Responsive Layout, chống tràn UI ở mức Zoom 100%
+- [x] Audit toàn diện (Model/Chi phí, Hiệu năng, Prompt, Bảo mật)
+- [x] Sửa usageMetadata token key sai
+- [x] Thêm sessionStorage cho API Key
+- [x] Chuyển for-loop tuần tự sang Concurrent Queue 3 luồng
+- [x] Tối ưu Prompt: xóa JSON template thừa ~800 token
+- [x] Cập nhật implementation_plan.md với kết quả audit
+- [x] Tạo vercel.json cấu hình deploy tĩnh
+- [x] Copy tài liệu vào thư mục implements
 - [ ] Test End-to-End flow in live application
+- [ ] Deploy lên Vercel

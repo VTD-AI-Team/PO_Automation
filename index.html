@@ -390,9 +390,15 @@
                     showToast('error', 'Vui lòng nhập API Key trước khi lưu.');
                     return;
                 }
+                // Lưu vào sessionStorage để tồn tại trong phiên trình duyệt hiện tại
+                sessionStorage.setItem('vitadairy_api_key', ky);
                 toggleAiConfigModal(false);
                 showToast('success', 'Đã lưu cấu hình API Key hệ thống.', 'Ai Config');
             });
+            
+            // Tự điền lại API Key nếu đã lưu trong phiên này
+            const savedKey = sessionStorage.getItem('vitadairy_api_key');
+            if(savedKey) document.getElementById('apiKeyInput').value = savedKey;
             
             // Đóng Modal khi click ngoài vùng nền
             aiConfigModal.addEventListener('click', (e) => {
@@ -608,7 +614,7 @@
 
             // --- 2. EXTRACTION LOGIC (GEMINI) ---
             btnExtract.addEventListener('click', async () => {
-                const apiKey = document.getElementById('apiKeyInput').value.trim();
+                const apiKey = sessionStorage.getItem('vitadairy_api_key') || document.getElementById('apiKeyInput').value.trim();
                 if (!apiKey) {
                     showToast('error', "Không tìm thấy API Key. Xin vui lòng cài đặt trong mục Cấu hình AI góc trên bên phải màn hình.");
                     toggleAiConfigModal(true);
@@ -643,44 +649,44 @@
                     </tr>
                 `;
 
-                for (let i = 0; i < pendingFiles.length; i++) {
-                    const item = pendingFiles[i];
+                // Cơ chế xử lý Song Song (Concurrent Queue) - Tối đa 3 file cùng lúc
+                const CONCURRENCY_LIMIT = 3;
+                const queue = [...pendingFiles];
+                const inFlight = new Set();
+
+                async function processNext() {
+                    if (queue.length === 0) return;
+                    const item = queue.shift();
+                    inFlight.add(item.id);
                     item.status = 'processing';
                     renderFileQueue();
-                    
-                    // Force UI to show document preview of processing file safely
-                    if(currentPreviewId !== item.id) previewFile(item.id);
+                    if(currentPreviewId !== item.id && inFlight.size === 1) previewFile(item.id);
 
                     const startTime = performance.now();
                     try {
                         const { jsonData, usageMetadata } = await extractDataWithGemini(item.file.name, item.file.type, item.base64, apiKey);
-                        
                         const endTime = performance.now();
                         const processTime = ((endTime - startTime) / 1000).toFixed(2);
-                        
+
                         let fileCostVND = 0;
                         if(usageMetadata) {
-                            const inputCost = (usageMetadata.promptTokenCount / 1000000) * 0.075;
-                            const outputCost = (usageMetadata.candidatesTokenCount / 1000000) * 0.30;
+                            // Sử dụng đúcng key tử Gemini API (promptTokenCount + candidatesTokenCount)
+                            const promptT = usageMetadata.promptTokenCount || 0;
+                            const outputT = usageMetadata.candidatesTokenCount || (usageMetadata.totalTokenCount - promptT) || 0;
+                            const inputCost  = (promptT  / 1000000) * 0.075;
+                            const outputCost = (outputT / 1000000) * 0.30;
                             fileCostVND = (inputCost + outputCost) * 25500;
+                            console.log(`[COST] ${item.file.name}: Input=${promptT}tkn, Output=${outputT}tkn, Cost=ᄑ${Math.round(fileCostVND).toLocaleString('vi-VN')} VNĐ`);
                         }
 
-                        // Add property to all rows inside jsonData
-                        jsonData.forEach(row => {
-                            row["Thời gian xử lý (Giây)"] = processTime;
-                        });
-
+                        jsonData.forEach(row => { row["Thời gian xử lý (Giây)"] = processTime; });
                         item.extractedData = jsonData;
                         item.status = 'success';
-                        
-                        // Update globals tracking
+
                         window.totalProcessTime += parseFloat(processTime);
                         window.totalApiCostVND += fileCostVND;
-                        
-                        // Update UI Realtime
                         document.getElementById('totalTimeLabel').innerText = window.totalProcessTime.toFixed(2) + "s";
                         document.getElementById('totalCostLabel').innerText = Math.round(window.totalApiCostVND).toLocaleString('vi-VN') + " VNĐ";
-
                         showToast('success', `Bóc tách thành công [${item.file.name}] (${jsonData.length} dòng).`);
                     } catch (error) {
                         console.error("Extraction error:", item.file.name, error);
@@ -688,15 +694,18 @@
                         item.errorMsg = error.message;
                         showToast('error', `Lỗi [${item.file.name}]: ${error.message}`);
                     }
-                    
-                    // Re-calculate global data cumulative
+
+                    inFlight.delete(item.id);
                     window.currentExtractedData = [];
-                    fileQueueData.forEach(f => {
-                        if(f.extractedData) window.currentExtractedData = window.currentExtractedData.concat(f.extractedData);
-                    });
+                    fileQueueData.forEach(f => { if(f.extractedData) window.currentExtractedData = window.currentExtractedData.concat(f.extractedData); });
                     renderTable(window.currentExtractedData);
                     renderFileQueue();
+                    await processNext(); // Lấy file kế tiếp từ hàng đợi
                 }
+
+                // Khởi động CONCURRENCY_LIMIT luồng song song
+                const workers = Array.from({ length: Math.min(CONCURRENCY_LIMIT, pendingFiles.length) }, () => processNext());
+                await Promise.allSettled(workers);
 
                 extractBtnText.innerText = oldText;
                 extractIcon.innerText = oldIcon;
@@ -715,16 +724,9 @@
             });
 
             async function extractDataWithGemini(fileName, mimeType, base64Data, apiKey) {
-                // Determine model
-                const listModelsUrl = "https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey;
-                const listResp = await fetch(listModelsUrl);
-                if (!listResp.ok) throw new Error("API Key bị lỗi hoặc quá hạn (400 Bad Request).");
-                const listData = await listResp.json();
-                
-                // Force target to gemini-2.5-flash as the primary fast parser
-                let targetModel = { name: "models/gemini-2.5-flash" };
-
-                console.log("Using model:", targetModel.name);
+                // Hardcoded to gemini-2.5-flash - DO NOT auto-detect (risk of selecting expensive Pro model)
+                const MODEL_NAME = "models/gemini-2.5-flash";
+                console.log("Đang gọi API với Model:", MODEL_NAME);
 
                 // Construct Exact SAP JSON Output Keys Template
                 const OutputJSONFormatObj = {};
@@ -749,55 +751,14 @@
 - Hàng tặng (Free Qty): Nếu có hàng khuyến mãi, BẮT BUỘC sinh ra 1 object riêng, Sloc='O1KM', và nối thêm " - Hàng KM" vào Tên Sku.
 
 5. ZERO HALLUCINATION:
-- Trả về JSON Array. Trong đó gộp 3 cột UI (Source File, Page, Status="Extracted") vào lúc xuất.
-Dưới đây là Khung JSON Key YÊU CẦU:
-[
-    {
-        "Source File": "${fileName}",
-        "Page": 1,
-        "Status": "Extracted",
-        "Date Ngày PO": "",
-        "SaleOrder ID": "",
-        "Order Type": "",
-        "Sale Org": "1000",
-        "Dist. Channel": "10",
-        "Division": "",
-        "Sold-to (Pháp nhân)": "",
-        "Ship-to (ĐC giao hàng)": "",
-        "Cust. Reference (Số PO)": "",
-        "Material": "",
-        "BarCode Mã vạch": "",
-        "Tên Sku": "",
-        "Order Quantity": 0,
-        "Unit": "",
-        "Plant": "V001",
-        "Sloc": "",
-        "Batch. No": "",
-        "Billing line note (HDDT)": "",
-        "Sale Employee": "",
-        "WBS Element": "",
-        "Người mua hàng": "",
-        "MÃ số thuế": "",
-        "Đơn vị mua hàng": "",
-        "Địa chỉ": "",
-        "Mã số thuế ": "",
-        "Sales document notes": "",
-        "Delivery document notes": "",
-        "Billing document notes (HDDT)": "",
-        "Mã vận đơn": "",
-        "Link file vận đơn": "",
-        "Ghi chú DVKH header": "",
-        "Ngày YC giao hàng DD/MM/YYYY": "",
-        "Lý do hủy đơn": "",
-        "Sale Org ": "",
-        "Sale Office": "",
-        "Số điện thoại": "",
-        "Người nhận hàng": "",
-        "Địa chỉ giao hàng": ""
-    }
-]`;
+- CHỈ trả về JSON Array hợp lệ, KHÔNG giải thích thêm.
+- Mỗi object PHẢI có ĐỦ CÁC KEY sau (theo đúng thứ tự):
+"Source File", "Page", "Status", "Date Ngày PO", "SaleOrder ID", "Order Type", "Sale Org", "Dist. Channel", "Division", "Sold-to (Pháp nhân)", "Ship-to (ĐC giao hàng)", "Cust. Reference (Số PO)", "Material", "BarCode Mã vạch", "Tên Sku", "Order Quantity", "Unit", "Plant", "Sloc", "Batch. No", "Billing line note (HDDT)", "Sale Employee", "WBS Element", "Người mua hàng", "MÃ số thuế", "Đơn vị mua hàng", "Địa chỉ", "Mã số thuế ", "Sales document notes", "Delivery document notes", "Billing document notes (HDDT)", "Mã vận đơn", "Link file vận đơn", "Ghi chú DVKH header", "Ngày YC giao hàng DD/MM/YYYY", "Lý do hủy đơn", "Sale Org ", "Sale Office", "Số điện thoại", "Người nhận hàng", "Địa chỉ giao hàng"
 
-                let url = "https://generativelanguage.googleapis.com/v1beta/" + targetModel.name + ":generateContent?key=" + apiKey;
+Giá trị mặc định: Source File="${fileName}", Page=Số trang, Status="Extracted", Sale Org="1000", Dist. Channel="10", Plant="V001". Các trường không có trong chứng từ để chuỗi rỗng "".`;
+
+
+                let url = "https://generativelanguage.googleapis.com/v1beta/" + MODEL_NAME + ":generateContent?key=" + apiKey;
                 
                 let response = await fetch(url, {
                     method: "POST",

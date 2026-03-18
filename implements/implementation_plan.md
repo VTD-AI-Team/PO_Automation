@@ -1,41 +1,104 @@
-# Kế hoạch Triển khai: Tính năng Upload Hàng loạt (Batch Upload)
+# Kế hoạch Triển khai: VitaDairy O2C AI Extractor
 
-Mục tiêu: Cho phép người dùng chọn và tải lên cùng lúc tối đa 10 tài liệu (PDF, Hình ảnh). Hệ thống sẽ đưa vào hàng đợi chờ xử lý, cung cấp chức năng lướt xem từng file, và nút "Trích xuất AI" sẽ lặp logic xử lý tự động cho toàn bộ files trong hàng đợi.
+## Mục tiêu
+Xây dựng công cụ trích xuất đơn hàng (PO) tự động bằng AI, chạy hoàn toàn trên trình duyệt (Client-side). Hệ thống cho phép upload tối đa 10 file PDF/ảnh, xử lý song song bằng Gemini AI, và xuất kết quả trực tiếp ra Excel theo chuẩn SAP S/4HANA FMCG.
 
-## Thay đổi đề xuất
+---
 
-### `index.html` (Frontend & Logic)
+## Kiến trúc Hệ thống
 
-#### [MODIFY] index.html
-1.  **Cập nhật Input Element:**
-    *   Thêm thuộc tính `multiple` vào thẻ `<input type="file" id="fileInput">`.
-    *   Thêm thuộc tính `accept=".pdf,image/*,.xls,.xlsx"` để giới hạn loại file phù hợp.
-2.  **Quản lý State State (Trạng thái):**
-    *   Thay thế biến `selectedFile` và `currentBase64Data` bằng một mảng `fileQueueData = []`. Mỗi phần tử chứa: `{ id, file, base64, status: 'pending'|'success'|'error', extractedData: [] }`.
-    *   Khai báo biến lưu chỉ số file đang được Preview: `currentPreviewIndex = 0`.
-3.  **UI Hàng đợi (File Queue):**
-    *   Viết lại hàm render khu vực `id="fileQueue"` dể lặp qua mảng `fileQueueData` và in ra danh sách các file.
-    *   Hỗ trợ giới hạn tải lên: `if(fileQueueData.length + newFiles.length > 10) showToast('Chỉ hỗ trợ tối đa 10 file cùng lúc')`.
-    *   Click vào mỗi dòng trong Hàng đợi sẽ kích hoạt hàm Review (Xem trước) nội dung file đó ở khung `previewContainer`.
-    *   Thêm nút (Icon thùng rác) để xóa từng file khỏi hàng đợi.
-4.  **UI Nút 'Trích xuất AI':**
-    *   Cập nhật logic nút bấm: Khi ấn, kiểm tra Mảng `fileQueueData`. Nếu trống thì báo lỗi.
-    *   Duyệt qua vòng lặp (For loop) dựa trên mảng `fileQueueData`.
-    *   Gọi hàm `extractDataWithGemini` tuần tự hoặc song song (Nên dùng tuần tự để tránh chạm giới hạn Rate Limit quota của Gemini quá nhanh nếu up 10 files).
-    *   Gom tổng (Concat) mảng kết quả JSON của từng file vào một mảng `window.currentExtractedData` duy nhất.
-5.  **Render Dữ liệu Bảng (Table Grid):**
-    *   Sau mỗi lần xử lý từng file xong (hoặc xử lý xong lô 10 file), gọi lại hàm `renderTable(window.currentExtractedData)` để lấp đầy bảng bằng tổng dữ liệu của MỌI file.
-    *   Cột **"Source File"** trong lưới Grid sẽ phát huy mạnh mẽ tác dụng ở đây, giúp user phân biệt dòng nào thuộc chứng từ PDF số mấy.
-6.  **Xóa thẻ Đợi (Xóa tất cả):**
-    *   Cập nhật lại logic nút "Xóa tất cả" để reset mảng `fileQueueData`, dọn dẹp biến, reset Table và Preview UI về rỗng.
+```
+Browser (index.html)
+  ├── Upload Module     → Drag & Drop, preview PDF/ảnh
+  ├── File Queue        → Hàng đợi tối đa 10 file
+  ├── Gemini API Client → Concurrent Queue (3 luồng song song)
+  ├── Data Grid         → Hiển thị + chỉnh sửa inline
+  └── Excel Exporter    → SheetJS, lọc 38 cột SAP chuẩn
+```
 
-## Kế hoạch Kiểm tra (Verification Plan)
+---
 
-### Kiểm thử Thủ công (Manual Review)
-1. Tải ứng dụng trên Browser bằng công cụ Live Server hoặc click mở trực tiếp file `index.html`.
-2. Kéo thả hoặc click chọn NHIỀU file PDF/Hình (3-5 files) cùng 1 lúc.
-3. Kiểm tra UI Hàng đợi xem có hiển thị đủ danh sách file không.
-4. Click luân phiên vào từng file trong hàng đợi xem khung Preview bên phải có load đúng nội dung file tương ứng không.
-5. Nhấn "Trích xuất" và quan sát tiến trình: Icon trạng thái của từng file trong list Queue sẽ đổi từ `đang đợi` -> `xoay tròn` -> `thành công tick xanh`.
-6. Kiểm tra Grid data bên phải có nối (append) đủ dữ liệu của toàn bộ số PO vừa chạy không. Số dòng phải bằng tổng các dòng SLOC+Lines của mọi documents.
-7. Nhấn Export Excel kiểm tra file đầu ra xuất trọn vẹn mọi dòng của 5 files đó.
+## Các Thay đổi đã Triển khai
+
+### `index.html` — File duy nhất (Single-page App)
+
+#### Cấu hình Model AI
+- Model: **`gemini-2.5-flash`** (hardcode, không auto-detect tránh chọn nhầm Pro)
+- Fallback: `gemini-1.5-flash` (kích hoạt khi nhận lỗi 404 hoặc 429)
+- Pricing: Input `$0.075/1M token`, Output `$0.30/1M token`, tỉ giá `25,500 VNĐ/USD`
+
+#### Bảo mật API Key
+- Key được lưu vào `sessionStorage` (tự xóa khi đóng tab, không persist lâu dài)
+- Tự điền lại input khi reload trong cùng phiên
+
+#### Hiệu năng: Concurrent Queue
+- Trước: `for...await` tuần tự — 10 file mất 8-10 phút
+- Sau: `Promise.allSettled` với `CONCURRENCY_LIMIT = 3` — 10 file còn 3-4 phút
+- Queue tự quản lý: mỗi worker tự kéo file tiếp theo khi xong
+
+#### Tối ưu Prompt (Token Cost)
+- Xóa JSON template 38 trường rỗng (~800 token thừa/lần gọi)  
+- Thay bằng danh sách key names ngắn gọn (~200 token)
+- Tiết kiệm ước tính: **~₫6,000-8,000 VNĐ/tháng** với 8,000 PO
+
+#### Logic Nghiệp vụ FMCG (System Prompt)
+| Luật | Mô tả |
+|---|---|
+| Chuẩn hóa ngày | `DD/MM/YYYY`, bỏ giờ phút |
+| Chống số mũ | Thêm `'` trước SaleOrder ID, BarCode |
+| Làm sạch OCR | Sửa lỗi quang học Tên SKU |
+| Tách dòng KM | Sloc=`O1KM`, nối ` - Hàng KM` vào Tên SKU |
+| Zero Hallucination | Chỉ trả về JSON Array, không giải thích |
+
+#### Đo lường Chi phí Thực tế
+- `performance.now()` bao quanh toàn bộ lệnh `fetch` → đo đúng thời gian API
+- Đọc `usageMetadata.promptTokenCount` + `candidatesTokenCount` từ response
+- Hiển thị realtime trên UI: **Tổng thời gian** và **API Phí (Ước tính)**
+- Log chi tiết trong Console: `[COST] file.pdf: Input=9000tkn, Output=350tkn`
+
+---
+
+## Cấu trúc Thư mục
+
+```
+Automate PO/
+├── index.html          ← File chính, toàn bộ UI + Logic
+├── .env                ← Ghi chú API Key (không đọc tự động, chỉ lưu tham khảo)
+└── implements/
+    ├── implementation_plan.md  ← Tài liệu này
+    └── task.md                 ← Danh sách công việc
+```
+
+---
+
+## Deploy lên Vercel
+
+### Cách 1: Vercel CLI
+```bash
+npm i -g vercel
+cd "Automate PO"
+vercel --prod
+```
+
+### Cách 2: Vercel Dashboard (Kéo thả)
+1. Vào [vercel.com](https://vercel.com) → New Project
+2. Kéo thả thư mục `Automate PO` vào vùng upload
+3. Framework: **Other** (Static HTML)
+4. Nhấn Deploy
+
+> [!IMPORTANT]
+> File `.env` KHÔNG được đọc tự động bởi trang web tĩnh. API Key phải nhập thủ công qua nút "Cấu hình AI" trên giao diện. KHÔNG commit API Key vào file `.env` khi push lên GitHub public.
+
+---
+
+## Kế hoạch Kiểm tra (Verification)
+
+| Bước | Mô tả | Kết quả mong đợi |
+|---|---|---|
+| 1 | Mở `index.html` trên trình duyệt | Giao diện hiển thị, không bị vỡ layout |
+| 2 | Nhập API Key, lưu cấu hình | Toast "Đã lưu", reload vẫn còn key |
+| 3 | Upload 3-5 file PDF cùng lúc | Queue hiển thị đủ, preview đúng file |
+| 4 | Bấm Trích xuất AI | 3 file xử lý song song, UI cập nhật realtime |
+| 5 | Kiểm tra Console log | `[COST]` log xuất hiện với số token thực tế |
+| 6 | Xuất Excel | File `.xlsx` tải về, đủ 38 cột SAP chuẩn |
+| 7 | Kiểm tra hóa đơn Google Cloud | Chỉ thấy Gemini Flash, không có Pro |
