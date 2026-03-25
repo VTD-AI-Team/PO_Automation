@@ -1811,18 +1811,21 @@ CHỈ TRẢ VỀ JSON.`;
 
                     const startTime = performance.now();
                     try {
-                        // Trích xuất vendorHint từ tên file để Inject từ điển động
-                        let vendorHint = null;
-                        const fnLower = item.file.name.toLowerCase();
-                        if (fnLower.includes('winmart') || fnLower.includes('win')) vendorHint = 'WinMart';
-                        else if (fnLower.includes('bigc') || fnLower.includes('go')) vendorHint = 'BigC / GO!';
-                        else if (fnLower.includes('coop')) vendorHint = 'Coop';
-                        else if (fnLower.includes('aeon')) vendorHint = 'Aeon';
-                        else if (fnLower.includes('emart')) vendorHint = 'Emart';
-                        else if (fnLower.includes('mega')) vendorHint = 'Mega';
-                        else if (fnLower.includes('nam')) vendorHint = 'An Nam';
-                        else if (fnLower.includes('bibo')) vendorHint = 'Bibomart';
-                        else if (fnLower.includes('pharmacity')) vendorHint = 'Pharmacity';
+                        // Trích xuất vendorHint từ UI hoặc tên file để Inject từ điển động
+                        let vendorHint = vendorChainFromUI !== 'DEFAULT' ? vendorChainFromUI : null;
+                        
+                        if (!vendorHint) {
+                            const fnLower = item.file.name.toLowerCase();
+                            if (fnLower.includes('winmart') || fnLower.includes('win')) vendorHint = 'WinMart';
+                            else if (fnLower.includes('bigc') || fnLower.includes('go')) vendorHint = 'BigC / GO!';
+                            else if (fnLower.includes('coop')) vendorHint = 'Coop';
+                            else if (fnLower.includes('aeon')) vendorHint = 'Aeon';
+                            else if (fnLower.includes('emart')) vendorHint = 'Emart';
+                            else if (fnLower.includes('mega')) vendorHint = 'Mega';
+                            else if (fnLower.includes('nam')) vendorHint = 'An Nam';
+                            else if (fnLower.includes('bibo')) vendorHint = 'Bibomart';
+                            else if (fnLower.includes('pharmacity')) vendorHint = 'Pharmacity';
+                        }
 
                         const { rawJson, usageMetadata } = await extractRawOCR(item.file.name, item.file.type, item.base64, apiKey, vendorHint);
                         const endTime = performance.now();
@@ -2313,15 +2316,29 @@ CHỈ TRẢ VỀ JSON.`;
         function dictAddVendor() {
             const name = (document.getElementById('dictNewChain')?.value || '').trim();
             if (!name) { showToast('error', 'Vui lòng nhập tên chuỗi siêu thị.', 'Dictionary'); return; }
+            
+            // LƯU FORM ĐANG GÕ DỞ TRƯỚC KHI RENDER LẠI (Tránh mất data)
             const data = dictLoad();
+            document.querySelectorAll('.dict-field').forEach(input => {
+                const idx   = +input.dataset.idx;
+                const field = input.dataset.field;
+                if(data[idx]) data[idx][field] = sanitizeKeywords(input.value);
+            });
+            dictSave(data);
+
             if (data.find(d => d.vendor_chain.toLowerCase() === name.toLowerCase())) {
                 showToast('error', `"${name}" đã tồn tại trong từ điển.`, 'Dictionary');
                 return;
             }
+            
             data.push({ vendor_chain: name, is_active: true, sold_to_keys: [], ship_to_keys: [], po_number_keys: [], store_keys: [], material_keys: [], date_keys: [] });
             dictSave(data);
             document.getElementById('dictNewChain').value = '';
             dictRenderList();
+            
+            // Auto scroll xuống dòng mới thêm
+            const list = document.getElementById('dictVendorList');
+            if(list) setTimeout(() => list.scrollTop = list.scrollHeight, 100);
         }
 
         function dictDelete(idx) {
