@@ -17,8 +17,7 @@
 - [x] Thêm sessionStorage cho API Key
 - [x] Chuyển for-loop tuần tự sang Concurrent Queue 3 luồng
 - [x] Tối ưu Prompt: xóa JSON template thừa ~800 token
-- [x] Cập nhật implementation_plan.md với kết quả audit
-- [x] Tạo vercel.json cấu hình deploy tĩnh
-- [x] Copy tài liệu vào thư mục implements
+- [x] Cập nhật implementation_plan.md với Hướng dẫn sử dụng & Troubleshooting
+- [x] Tích hợp Dictionary vào Prompt AI (OCR Engine v2.1)
 - [ ] Test End-to-End flow in live application
-- [ ] Deploy lên Vercel
+- [ ] Deploy lên Vercel (Production)

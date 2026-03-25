@@ -26,6 +26,7 @@
                 },
             },
         }
+        // ================================================================
     </script>
     <title>VitaDairy O2C AI Extractor</title>
     <style>
@@ -59,6 +60,20 @@
         .dark [contenteditable="true"]:focus {
             background-color: #1e293b;
         }
+        /* Skeleton Animation */
+        @keyframes skeleton-loading {
+            0% { background-position: 100% 50%; }
+            100% { background-position: 0 50%; }
+        }
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+        }
+        .dark .skeleton {
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
+        }
     </style>
 </head>
 <body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 h-screen w-full overflow-hidden flex flex-col">
@@ -90,39 +105,128 @@
         </div>
     </div>
 
+
+    <!-- ===== MODULE 1: DICTIONARY EDITOR MODAL ===== -->
+    <div id="dictModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col animate-slide-in">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 shrink-0">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">menu_book</span>
+                    Từ điển Siêu thị (Dynamic Dictionary)
+                </h3>
+                <button onclick="document.getElementById('dictModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="flex-1 overflow-auto custom-scrollbar p-6 flex flex-col gap-5">
+                <p class="text-xs text-slate-500 dark:text-slate-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                    ℹ️ <b>Hướng dẫn:</b> Cấu hình từ khóa (Label) qua đây để AI tự động nhận diện đúng tên cột trên PO của từng siêu thị. Mỗi loại nhãn phân cách nhau bằng <b>dấu phẩy</b>. Các mảng keyword khác nhau <b>không được phép giao nhau</b>.
+                </p>
+                <!-- Vendor List -->
+                <div id="dictVendorList" class="flex flex-col gap-3"></div>
+                <!-- Add new vendor row -->
+                <div class="flex gap-2 mt-1">
+                    <input id="dictNewChain" type="text" placeholder="Tên chuỗi mới (vd: Aeon)" class="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary">
+                    <button onclick="dictAddVendor()" class="px-4 py-2 text-sm font-bold bg-primary text-white rounded-lg hover:bg-primary/90">+ Thêm mới</button>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
+                <button onclick="document.getElementById('dictModal').classList.add('hidden')" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg">Hủy</button>
+                <button onclick="dictSaveAll()" class="px-5 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-lg">Lưu từ điển</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODULE 2: EXTRACTION LOG DETAIL MODAL ===== -->
+    <div id="logDetailModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-2xl animate-slide-in">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" id="logDetailTitle">Chi tiết lần trích xuất</h3>
+                <button onclick="document.getElementById('logDetailModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6 text-sm" id="logDetailBody"></div>
+        </div>
+    </div>
+
     <!-- AI Config Modal (Ẩn mặc định) -->
+
     <div id="aiConfigModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-in">
             <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
                 <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <span class="material-symbols-outlined text-primary">settings_suggest</span>
-                    Cấu hình AI
+                    Cấu hình Hệ thống
                 </h3>
                 <button id="btnCloseAiConfig" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
-            <div class="p-6 flex flex-col gap-6">
-                <!-- API Key Input -->
+            <div class="p-6 flex flex-col gap-5">
+
+                <!-- API Key -->
                 <div class="flex flex-col gap-2">
                     <label class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 text-sm">
-                        <span class="material-symbols-outlined text-base text-slate-400">vpn_key</span> 
-                        Gemini API Key:
+                        <span class="material-symbols-outlined text-base text-slate-400">vpn_key</span> Gemini API Key:
                     </label>
                     <input type="password" id="apiKeyInput" placeholder="Nhập API Key để chạy AI Tool..." class="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 dark:text-slate-100 font-mono text-sm transition-all focus:border-primary">
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 italic mt-1">*Bắt buộc phải nhập trước khi tải chứng từ/trích xuất dữ liệu.</p>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 italic mt-1">*Bắt buộc nhập trước khi trích xuất.</p>
                 </div>
-                
-                <!-- Future AI Models Select -->
+
+                <hr class="border-slate-200 dark:border-slate-700"/>
+
+                <!-- Master Data Upload -->
+                <div class="hidden flex flex-col gap-3">
+                    <p class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 text-sm">
+                        <span class="material-symbols-outlined text-base text-slate-400">table_view</span>
+                        Master Data (Bảng tra cứu SAP):
+                    </p>
+
+                    <!-- Customer Master -->
+                    <div class="flex flex-col gap-2 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Customer Master</p>
+                                <p class="text-[10px] text-slate-400" id="customerMasterStatus">Chưa tải — Chứa: Cửa hàng, Mã SAP KHÁCH HÀNG</p>
+                            </div>
+                            <label class="cursor-pointer px-3 py-1.5 text-xs font-bold text-primary border border-primary/50 rounded-lg hover:bg-primary/5 transition-colors">
+                                <span class="material-symbols-outlined text-sm align-middle">upload_file</span> Upload
+                                <input type="file" id="customerMasterInput" onchange="handleCustomerMasterUpload(this)" accept=".csv,.xlsx,.xls" class="hidden">
+                            </label>
+                        </div>
+                        <div id="customerMasterPreview" class="hidden overflow-x-auto overflow-y-hidden max-w-full custom-scrollbar border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 mt-2"></div>
+                    </div>
+
+                    <!-- Material Master -->
+                    <div class="flex flex-col gap-2 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Material Master</p>
+                                <p class="text-[10px] text-slate-400" id="materialMasterStatus">Chưa tải — Chứa: Barcode/SKU Code, Mã SAP VẬT TƯ</p>
+                            </div>
+                            <label class="cursor-pointer px-3 py-1.5 text-xs font-bold text-primary border border-primary/50 rounded-lg hover:bg-primary/5 transition-colors">
+                                <span class="material-symbols-outlined text-sm align-middle">upload_file</span> Upload
+                                <input type="file" id="materialMasterInput" onchange="handleMaterialMasterUpload(this)" accept=".csv,.xlsx,.xls" class="hidden">
+                            </label>
+                        </div>
+                        <div id="materialMasterPreview" class="hidden overflow-x-auto overflow-y-hidden max-w-full custom-scrollbar border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 mt-2"></div>
+                    </div>
+
+                    <p class="text-[10px] text-slate-400 italic">ℹ️ Download template: <a href="CUSTOMER_MASTER_TEMPLATE.csv" download class="text-primary underline">Customer_Master.csv</a> &nbsp;|&nbsp; <a href="MATERIAL_MASTER_TEMPLATE.csv" download class="text-primary underline">Material_Master.csv</a></p>
+                </div>
+
+                <!-- AI Model Info -->
                 <div class="flex flex-col gap-2 opacity-50 cursor-not-allowed">
                     <label class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 text-sm">
                         <span class="material-symbols-outlined text-base text-slate-400">memory</span> 
-                        Phiên bản Model AI (Phase 2):
+                        AI Model (Phase 2 — nâng cấp tiếp theo):
                     </label>
                     <select disabled class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/50 text-slate-500 cursor-not-allowed text-sm">
                         <option>Gemini 2.5 Flash (Mặc định)</option>
                     </select>
                 </div>
+
             </div>
             <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3">
                 <button id="btnCancelAiConfig" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors">Hủy</button>
@@ -142,10 +246,11 @@
             </div>
         </div>
         <div class="flex flex-1 justify-end gap-4 items-center">
-            <nav class="hidden md:flex gap-6 mr-6">
-                <a class="text-sm font-medium text-primary border-b-2 border-primary pb-1" href="#">Dashboard</a>
-                <a class="text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200" href="#">Lịch sử trích xuất</a>
-                <button id="btnOpenAiConfig" class="text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">Cấu hình AI</button>
+            <nav class="hidden md:flex gap-6 mr-6 items-center">
+                <button data-tab="extraction" onclick="switchTab('extraction')" class="tab-nav-btn text-sm font-medium text-primary border-b-2 border-primary pb-1 transition-all">Trích xuất PO</button>
+                <button data-tab="analytics" onclick="switchTab('analytics')" class="tab-nav-btn text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 pb-1 border-b-2 border-transparent transition-all">&#128202; Analytics</button>
+                <button onclick="document.getElementById('dictModal').classList.remove('hidden'); dictRenderList()" class="text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">&#128218; Từ điển AI</button>
+                <button id="btnOpenAiConfig" onclick="document.getElementById('aiConfigModal').classList.remove('hidden')" class="text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">Cấu hình AI</button>
             </nav>
             <div class="flex gap-2">
                 <button class="flex items-center justify-center rounded-lg h-10 w-10 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors">
@@ -166,6 +271,25 @@
             <div class="p-5 flex flex-col gap-6 h-full min-h-0">
                 <div class="flex flex-col gap-1 shrink-0">
                     <h1 class="text-lg font-black leading-tight tracking-tight text-slate-900 dark:text-slate-100">Quản lý Chứng từ</h1>
+                </div>
+
+                <!-- VENDOR SELECTION (Senior Review Suggestion) -->
+                <div class="flex flex-col gap-2">
+                    <label for="vendorSelect" class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">storefront</span> Chọn Hệ thống Siêu thị:
+                    </label>
+                    <select id="vendorSelect" data-field="vendor-chain" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all cursor-pointer hover:border-primary/50">
+                        <option value="DEFAULT">-- Tự động nhận diện --</option>
+                        <option value="Aeon">Aeon</option>
+                        <option value="Big_C">Big C / GO!</option>
+                        <option value="Coop">Coop Mart</option>
+                        <option value="Emart">Emart</option>
+                        <option value="Pharmacity">Pharmacity</option>
+                        <option value="WinMart">WinMart / WinMart+</option>
+                        <option value="Bibomart">Bibo Mart</option>
+                        <option value="Mega">MM Mega Market</option>
+                        <option value="An_Nam">An Nam Gourmet</option>
+                    </select>
                 </div>
 
                 <!-- DRAG N DROP UPLOAD AREA -->
@@ -309,11 +433,235 @@
                 </div>
             </footer>
         </section>
+
+        <!-- ===== MODULE 2: ANALYTICS TAB VIEW (ẩn mặc định) ===== -->
+        <section id="analyticsView" class="hidden flex-1 flex flex-col bg-background-light dark:bg-background-dark overflow-auto custom-scrollbar">
+            <div class="p-6 flex flex-col gap-6">
+                <h2 class="text-xl font-black text-slate-900 dark:text-slate-100">&#128202; Analytics Dashboard</h2>
+
+                <!-- Stats Cards Row -->
+                <div class="grid grid-cols-4 gap-4">
+                    <!-- Card: Today -->
+                    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Hôm nay</span>
+                            <span class="material-symbols-outlined text-primary text-xl">today</span>
+                        </div>
+                        <div id="statToday" class="text-3xl font-black text-slate-900 dark:text-slate-100 stat-animate">—</div>
+                        <div id="statTodayGrowth" class="text-xs text-slate-500"></div>
+                    </div>
+                    <!-- Card: Week -->
+                    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tuần này</span>
+                            <span class="material-symbols-outlined text-violet-500 text-xl">date_range</span>
+                        </div>
+                        <div id="statWeek" class="text-3xl font-black text-slate-900 dark:text-slate-100 stat-animate">—</div>
+                        <div id="statWeekGrowth" class="text-xs text-slate-500"></div>
+                    </div>
+                    <!-- Card: Month -->
+                    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tháng này</span>
+                            <span class="material-symbols-outlined text-emerald-500 text-xl">calendar_month</span>
+                        </div>
+                        <div id="statMonth" class="text-3xl font-black text-slate-900 dark:text-slate-100 stat-animate">—</div>
+                        <div id="statMonthGrowth" class="text-xs text-slate-500"></div>
+                    </div>
+                    <!-- Card: Avg Time -->
+                    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Thời gian TB</span>
+                            <span class="material-symbols-outlined text-amber-500 text-xl">timer</span>
+                        </div>
+                        <div id="statAvgTime" class="text-3xl font-black text-slate-900 dark:text-slate-100 stat-animate">—</div>
+                        <div id="statAvgTimeDiff" class="text-xs text-slate-500"></div>
+                    </div>
+                </div>
+
+                <!-- Extraction History Table -->
+                <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Lịch sử Trích xuất</h3>
+                        <div class="flex items-center gap-2">
+                            <select id="filterStatus" onchange="analyticsRender()" class="text-xs px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                                <option value="">Tất cả trạng thái</option>
+                                <option value="SUCCESS">&#9989; SUCCESS</option>
+                                <option value="UNMATCHED_DATA">&#10071; UNMATCHED</option>
+                                <option value="FAILED_OCR">&#128308; FAILED</option>
+                            </select>
+                            <button onclick="analyticsRender()" class="text-xs px-3 py-1 bg-primary text-white rounded-lg font-bold hover:bg-primary/90">&#8635; Làm mới</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50 dark:bg-slate-800 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                <tr>
+                                    <th class="px-5 py-3 text-left">Thời gian</th>
+                                    <th class="px-5 py-3 text-left">File</th>
+                                    <th class="px-5 py-3 text-left">Khách hàng</th>
+                                    <th class="px-5 py-3 text-right">Số dòng</th>
+                                    <th class="px-5 py-3 text-right">Thời gian (s)</th>
+                                    <th class="px-5 py-3 text-right">Chi phí (VNĐ)</th>
+                                    <th class="px-5 py-3 text-center">Trạng thái</th>
+                                    <th class="px-5 py-3 text-center">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="analyticsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                                <tr><td colspan="8" class="py-10 text-center text-slate-400 text-sm"><span class="material-symbols-outlined text-4xl block mb-2">history</span>Chưa có lịch sử trích xuất nào.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Pagination -->
+                    <div class="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-800">
+                        <span class="text-xs text-slate-500" id="analyticsPagingLabel"></span>
+                        <div class="flex gap-2">
+                            <button id="analyticsPrevBtn" onclick="analyticsPage(-1)" class="px-3 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40">&#8592; Trước</button>
+                            <button id="analyticsNextBtn" onclick="analyticsPage(1)" class="px-3 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40">Sau &#8594;</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
+
 
     <!-- ===== LOGIC JAVASCRIPT ===== -->
     <script>
+        // Global toggle function - works independently of DOMContentLoaded
+        function toggleAiConfigModal(show) {
+            const modal = document.getElementById('aiConfigModal');
+            if(show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+
+        // Global functions for handling Master Data upload
+        // Define these globally so inline onchange="" works even if DOMContentLoaded fails
+        let customerMasterData = []; 
+        let materialMasterData = []; 
+
+        function parseMasterDataCsvOrXlsx(file, callback) {
+            const reader = new FileReader();
+            const fileNameLower = file.name.toLowerCase();
+            
+            if (fileNameLower.endsWith('.csv')) {
+                reader.onload = (e) => {
+                    try {
+                        const rawText = e.target.result.trim();
+                        if(!rawText) return callback([]);
+                        
+                        const lines = rawText.split('\n');
+                        const delimiter = lines[0].includes(';') ? ';' : ',';
+                        
+                        const headers = lines[0].split(delimiter).map(h => h.trim().replace(/^"|"$/g, '').replace(/\r/g, ''));
+                        const rows = lines.slice(1).map(line => {
+                            const vals = line.split(delimiter).map(v => v.trim().replace(/^"|"$/g, '').replace(/\r/g, ''));
+                            const obj = {};
+                            headers.forEach((h, i) => obj[h] = vals[i] || '');
+                            return obj;
+                        }).filter(r => Object.values(r).some(v => v !== ''));
+                        
+                        callback(rows);
+                    } catch(err) {
+                        console.error('CSV Parse error', err);
+                        callback([]);
+                    }
+                };
+                reader.readAsText(file, 'UTF-8');
+            } else {
+                reader.onload = (e) => {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+                    callback(rows);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function renderMasterDataPreviewHtml(dataArray, containerId) {
+            const container = document.getElementById(containerId);
+            if (!dataArray || dataArray.length === 0) {
+                container.innerHTML = '<p class="p-2 text-xs text-slate-500">Dữ liệu rỗng.</p>';
+                container.classList.remove('hidden');
+                return;
+            }
+            
+            const previewRows = dataArray.slice(0, 5);
+            const headers = Object.keys(dataArray[0] || {});
+            
+            let html = `<table class="w-full text-left border-collapse whitespace-nowrap"><thead class="bg-slate-100 dark:bg-slate-800"><tr>`;
+            headers.forEach(h => {
+                html += `<th class="px-3 py-2 text-[10px] font-bold text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">${h}</th>`;
+            });
+            html += `</tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-[10px] text-slate-500 dark:text-slate-400">`;
+            
+            previewRows.forEach(row => {
+                html += `<tr>`;
+                headers.forEach(h => {
+                    html += `<td class="px-3 py-1.5 truncate max-w-[150px]" title="${row[h]}">${row[h]}</td>`;
+                });
+                html += `</tr>`;
+            });
+            html += `</tbody></table>`;
+            if (dataArray.length > 5) {
+                html += `<p class="p-1.5 text-[9px] text-center text-slate-400 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 italic">...hiển thị 5/${dataArray.length} dòng...</p>`;
+            }
+            
+            container.innerHTML = html;
+            container.classList.remove('hidden');
+        }
+
+        function handleCustomerMasterUpload(inputEl) {
+            const file = inputEl.files[0];
+            if (!file) return;
+            parseMasterDataCsvOrXlsx(file, (rows) => {
+                customerMasterData = rows;
+                try {
+                    localStorage.setItem('vitadairy_customer_master', JSON.stringify(rows));
+                    localStorage.setItem('vitadairy_customer_filename', file.name);
+                } catch(e) { console.warn('Không đủ dung lượng lưu LocalStorage', e); }
+                
+                document.getElementById('customerMasterStatus').innerHTML =
+                    `<span class="text-emerald-600 font-bold">✅ Đã tải ${rows.length} cửa hàng</span> từ "${file.name}" - (ĐÃ LƯU BỘ NHỚ TRÌNH DUYỆT)`;
+                renderMasterDataPreviewHtml(rows, 'customerMasterPreview');
+                // Gọi showToast nếu exists
+                if(typeof showToast === 'function') showToast('success', `Đã nạp Customer Master: ${rows.length} dòng.`);
+                else alert(`Đã nạp thành công Customer Master: ${rows.length} dòng.`);
+                inputEl.value = ''; // Thu hồi
+            });
+        }
+
+        function handleMaterialMasterUpload(inputEl) {
+            const file = inputEl.files[0];
+            if (!file) return;
+            parseMasterDataCsvOrXlsx(file, (rows) => {
+                // TASK 6: Validate Material Master trước khi lưu
+                const validation = validateMaterialMaster(rows);
+                if (validation.warnings.length > 0) {
+                    showToast('warning', `${validation.warnings.length} cảnh báo định dạng:\n${validation.warnings.slice(0,5).join('\n')}`, 'Master Data');
+                }
+                if (validation.errors.length > 0) {
+                    showToast('error', `Import thất bại: ${validation.errors.length} lỗi cần sửa:\n${validation.errors.slice(0,5).join('\n')}`, 'Material Master');
+                    return;
+                }
+                materialMasterData = validation.valid;
+                try {
+                    localStorage.setItem('vitadairy_material_master', JSON.stringify(rows));
+                    localStorage.setItem('vitadairy_material_filename', file.name);
+                } catch(e) { console.warn('Không đủ dung lượng lưu LocalStorage', e); }
+                
+                document.getElementById('materialMasterStatus').innerHTML =
+                    `<span class="text-emerald-600 font-bold">✅ Đã tải ${rows.length} vật tư</span> từ "${file.name}" - (ĐÃ LƯU BỘ NHỚ TRÌNH DUYỆT)`;
+                renderMasterDataPreviewHtml(rows, 'materialMasterPreview');
+                if(typeof showToast === 'function') showToast('success', `Đã nạp Material Master: ${rows.length} dòng.`);
+                else alert(`Đã nạp thành công Material Master: ${rows.length} dòng.`);
+                inputEl.value = ''; // Thu hồi
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
+        try {
             
             // EXACT_EXCEL_HEADERS từ yêu cầu của User
             const EXACT_EXCEL_HEADERS = [
@@ -327,8 +675,8 @@
                 "Người nhận hàng", "Địa chỉ giao hàng", "Thời gian xử lý (Giây)"
             ];
             
-            // 3 Cột Traceability UI Only
-            const UI_HEADERS = ["Source File", "Page", "Status"];
+            // Cột Traceability UI Only (Phục vụ đối soát, không xuất ra Excel)
+            const UI_HEADERS = ["Source File", "Page", "Status", "Lý do báo lỗi", "Mã SKU Gốc", "Tên SP Gốc (Hóa đơn)"];
             const ALL_HEADERS = [...UI_HEADERS, ...EXACT_EXCEL_HEADERS];
 
             // Map Width Column Class để giao diện table hiển thị đẹp
@@ -336,6 +684,9 @@
                 "Source File": "min-w-[150px]",
                 "Page": "min-w-[80px] text-center",
                 "Status": "min-w-[100px]",
+                "Lý do báo lỗi": "min-w-[200px] text-red-600 font-medium whitespace-normal",
+                "Mã SKU Gốc": "min-w-[120px] shadow-sm bg-yellow-50",
+                "Tên SP Gốc (Hóa đơn)": "min-w-[250px] shadow-sm bg-yellow-50 text-indigo-800",
                 "Plant": "min-w-[80px]",
                 "Sloc": "min-w-[80px]",
                 "Unit": "min-w-[100px]",
@@ -369,9 +720,61 @@
                 trHeadersRow.appendChild(th);
             });
 
+            // Nạp lại Master Data từ LocalStorage nếu có
+            try {
+                const savedCustomer = localStorage.getItem('vitadairy_customer_master');
+                const savedCName = localStorage.getItem('vitadairy_customer_filename') || 'Đã lưu';
+                if (savedCustomer) {
+                    const parsedC = JSON.parse(savedCustomer);
+                    if (parsedC && parsedC.length > 0) {
+                        customerMasterData = parsedC;
+                        document.getElementById('customerMasterStatus').innerHTML =
+                            `<span class="text-emerald-600 font-bold">✅ Đã tải ${parsedC.length} cửa hàng</span> từ "${savedCName}" (Dữ liệu cũ)`;
+                        renderMasterDataPreviewHtml(parsedC, 'customerMasterPreview');
+                    }
+                }
+                
+                const savedMaterial = localStorage.getItem('vitadairy_material_master');
+                const savedMName = localStorage.getItem('vitadairy_material_filename') || 'Đã lưu';
+                if (savedMaterial) {
+                    const parsedM = JSON.parse(savedMaterial);
+                    if (parsedM && parsedM.length > 0) {
+                        materialMasterData = parsedM;
+                        document.getElementById('materialMasterStatus').innerHTML =
+                            `<span class="text-emerald-600 font-bold">✅ Đã tải ${parsedM.length} vật tư</span> từ "${savedMName}" (Dữ liệu cũ)`;
+                        renderMasterDataPreviewHtml(parsedM, 'materialMasterPreview');
+                    }
+                }
+            } catch(err) {
+                console.warn("Lỗi nạp Master Data từ bộ nhớ:", err);
+            }
+
             // --- 0. UI MODAL LCOIG ---
             const aiConfigModal = document.getElementById('aiConfigModal');
             
+            // ── VENDOR RULESET v4 ─────────────────────────────────────────
+            const VENDOR_RULESET = {
+                "Aeon":       { "sold_to": "Tìm thông tin dưới Logo Aeon",      "ship_to": "Để giao hàng",                        "po_number": "Số đơn hàng",             "store": "Tạo bởi | DELIVER TO | GIAO ĐẾN",                  "material": "Mã vạch"        },
+                "Big_C":      { "sold_to": "Ordered By",                         "ship_to": "Delivered To (lấy phần địa chỉ)",      "po_number": "Order No",                "store": "Delivered To (lấy phần mã số/tên chi nhánh ngắn)", "material": "Article"        },
+                "Coop":       { "sold_to": "Bill To:",                           "ship_to": "Ship To",                              "po_number": "P/O Number",              "store": "P/O Location",                                     "material": "SKU Number"     },
+                "Emart":      { "sold_to": "N/A",                                "ship_to": "Delivery to",                          "po_number": "PO No.",                  "store": "N/A",                                              "material": "Unit Barcode"   },
+                "Pharmacity": { "sold_to": "N/A",                                "ship_to": "Delivery address",                     "po_number": "PO number",               "store": "N/A",                                              "material": "Print code"     },
+                "WinMart":    { "sold_to": "N/A",                                "ship_to": "DELIVER TO | Mã Cửa Hàng",             "po_number": "Số đơn hàng | PO Number", "store": "Mã Cửa Hàng",                                     "material": "Barcode | Article Code" },
+                "Bibomart":   { "sold_to": "N/A",                                "ship_to": "Địa chỉ nhận hàng",                    "po_number": "Mã đơn",                  "store": "N/A",                                              "material": "Mã SP"          },
+                "Mega":       { "sold_to": "Người mua: Tên",                     "ship_to": "Địa điểm giao hàng : Tên",             "po_number": "Số thứ tự đơn đặt hàng",  "store": "N/A",                                              "material": "EAN sản phẩm"   },
+                "An_Nam":     { "sold_to": "N/A",                                "ship_to": "DELIVER TO | GIAO ĐẾN",                "po_number": "Order ID",                "store": "DELIVER TO | GIAO ĐẾN",                            "material": "Barcode"        },
+                "DEFAULT":    { "sold_to": "Người mua | Bill to | Ordered By",   "ship_to": "Địa chỉ nhận | Ship to | DELIVER TO",  "po_number": "Số đơn hàng | PO No | Order ID", "store": "Mã cửa hàng | Chi nhánh",               "material": "Mã SP | Barcode | SKU" },
+            };
+
+            // Vendor không in sold_to trên PDF → override bằng thông tin VitaDairy
+            const VENDOR_SOLDTO_DEFAULTS = {
+                "Bibomart":   { sold_to_code: '', sold_to_name: 'Công ty CP Dinh Dưỡng Quốc Tế VitaDairy', sales_org: '1000', dist_channel: '10', division: '10', sale_office: '', sale_employee: '' },
+                "Pharmacity": { sold_to_code: '', sold_to_name: 'Công ty CP Dinh Dưỡng Quốc Tế VitaDairy', sales_org: '1000', dist_channel: '10', division: '10', sale_office: '', sale_employee: '' },
+                "Emart":      { sold_to_code: '', sold_to_name: 'Công ty CP Dinh Dưỡng Quốc Tế VitaDairy', sales_org: '1000', dist_channel: '10', division: '10', sale_office: '', sale_employee: '' },
+                "WinMart":    { sold_to_code: '', sold_to_name: 'Công ty CP Dinh Dưỡng Quốc Tế VitaDairy', sales_org: '1000', dist_channel: '10', division: '10', sale_office: '', sale_employee: '' },
+                // Thêm vendor khác tại đây nếu cần
+            };
+
             function toggleAiConfigModal(show) {
                 if(show) {
                     aiConfigModal.classList.remove('hidden');
@@ -405,9 +808,748 @@
                 if(e.target === aiConfigModal) toggleAiConfigModal(false);
             });
 
+            // N/A - Removed duplicate functions from DOMContentLoaded since they're global now
+
+            // ===== MAPPING ENGINE v2.0 (Red-Team Architecture Audit) =====
+
+            /** TASK 1: Escape Regex special chars */
+            function escapeRegex(str) {
+                return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+
+            /**
+             * TASK 1: Customer Lookup V2
+             * Word-Boundary Regex + Collision Guard (AMBIGUOUS)
+             * @returns {{ result: Object|null, status: 'MATCHED'|'NO_MATCH'|'AMBIGUOUS', candidates: Object[] }}
+             */
+            function lookupCustomer(storeRawInfo, soldToHint, customerMaster, vendorChainHint = null) {
+                const haystack = [storeRawInfo, soldToHint].filter(Boolean).join(' | ').toLowerCase().trim();
+                if (!haystack || !customerMaster.length) return { result: null, status: 'NO_MATCH', candidates: [] };
+
+                // Thu hẹp phạm vi bằng token matching (Ví dụ "BigC / GO!" khớp "BigC")
+                let pool = customerMaster;
+                if (vendorChainHint) {
+                    const hrParts = vendorChainHint.toLowerCase().split(/\\W+/).filter(Boolean);
+                    if (hrParts.length > 0) {
+                        pool = customerMaster.filter(r => {
+                            const dbVendor = (r.vendor_chain || '').toLowerCase();
+                            if (!dbVendor) return true; // Cột trống thì cho qua
+                            const dbParts = dbVendor.split(/\\W+/).filter(Boolean);
+                            return dbParts.some(p => hrParts.includes(p)) || hrParts.some(p => dbParts.includes(p));
+                        });
+                        // Nếu lọc quá chặt quá tay về 0, bung lụa quét full mảng
+                        if (pool.length === 0) pool = customerMaster;
+                    }
+                }
+
+                const matches = [];
+                for (const row of pool) {
+                    const keywords = (row.store_keyword || '').split('|')
+                        .map(k => k.trim().toLowerCase()).filter(Boolean);
+
+                    for (const kw of keywords) {
+                        if (!kw) continue;
+
+                        // Tạo unicode-aware word boundary để tránh dính liền vào từ Tiếng Việt (chống lỗi \b của hệ thống mặc định)
+                        const b1 = `(?:^|[^a-zA-Z0-9_À-ỹ])`;
+                        const b2 = `(?:$|[^a-zA-Z0-9_À-ỹ])`;
+                        const pattern = new RegExp(`${b1}${escapeRegex(kw)}${b2}`, 'i');
+
+                        if (pattern.test(haystack)) {
+                            matches.push(row);
+                            break; // tránh đếm trùng nếu nhiều keyword của cùng 1 dòng cùng match
+                        }
+                    }
+                }
+
+                if (matches.length > 1) return { result: null, status: 'AMBIGUOUS', candidates: matches };
+                if (matches.length === 1) return { result: matches[0], status: 'MATCHED', candidates: matches };
+                return { result: null, status: 'NO_MATCH', candidates: [] };
+            }
+
+            // ── RESOLVE SOLD-TO: 3 luồng Master → Override → Unmatched ───
+            function resolveSoldTo(rawJson, lookupResult, vendorChain) {
+                // Luồng 1: Master lookup thành công
+                if (lookupResult.status === 'MATCHED') {
+                    return { customerInfo: lookupResult.result, source: 'MASTER', warning: null };
+                }
+                // Luồng 2: Vendor không in sold_to trên PDF → dùng default VitaDairy
+                const override = VENDOR_SOLDTO_DEFAULTS[vendorChain];
+                if (override) {
+                    console.warn(`[resolveSoldTo] ${vendorChain}: dùng default công ty VitaDairy`);
+                    return {
+                        customerInfo: {
+                            sold_to_code:  override.sold_to_code,
+                            sold_to_name:  override.sold_to_name,
+                            ship_to_code:  lookupResult.result?.ship_to_code ?? '',
+                            ship_to_name:  lookupResult.result?.ship_to_name ?? '',
+                            sale_org:      override.sales_org,
+                            dist_channel:  override.dist_channel,
+                            division:      override.division,
+                            sale_office:   override.sale_office,
+                            sale_employee: override.sale_employee,
+                        },
+                        source:  'VENDOR_OVERRIDE',
+                        warning: `sold_to dùng default công ty (${vendorChain} không in trên PDF)`,
+                    };
+                }
+                // Luồng 3: Không tìm được gì
+                return { customerInfo: null, source: 'UNMATCHED', warning: `Không tìm được sold_to cho ${vendorChain}` };
+            }
+
+            /**
+             * TASK 2: Resolve tên cột vendor trong Pivot Matrix — Token-based matching
+             * Gỡ rối tình huống "BigC / GO!" đi tìm cột "BigC"
+             */
+            function resolveVendorColumn(allHeaders, vendorChain) {
+                if (!vendorChain) return null;
+                const vcParts = vendorChain.trim().toLowerCase().split(/\\W+/).filter(Boolean);
+                if (vcParts.length === 0) return null;
+
+                // Tier 1: Exact string match cho toàn bộ một trong số các headers
+                const exact = allHeaders.find(h => h.trim().toLowerCase() === vendorChain.trim().toLowerCase());
+                if (exact) return exact;
+
+                // Tier 2: Token match (Nếu một từ trong header xuất hiện trong vcParts)
+                const word = allHeaders.find(h => {
+                    const hParts = h.trim().toLowerCase().split(/\\W+/).filter(Boolean);
+                    if (hParts.length === 0) return false;
+                    return hParts.some(p => vcParts.includes(p));
+                });
+                if (word) return word;
+
+                return null; // Không tìm thấy — caller sẽ thử fallback Barcode
+            }
+
+            /**
+             * TASK 3: Parse số lượng an toàn — 5 case phân biệt rõ ràng
+             * KHÔNG dùng if(!rawValue) vì sẽ bắt nhầm số 0
+             * @returns {{ value: number, isValid: boolean, isNaN: boolean }}
+             */
+            function safeParseQty(rawValue) {
+                // Case 1: AI không trả về gì
+                if (rawValue === null || rawValue === undefined || rawValue === '') {
+                    return { value: 0, isValid: false, isNaN: false };
+                }
+
+                // Case 2: Sanitize dấu phẩy hàng nghìn rồi parse
+                const cleaned = String(rawValue).replace(/,/g, '').trim();
+                const parsed  = Number(cleaned);
+
+                // Case 3: Không parse được (chuỗi rác "N/A", ký tự lạ)
+                if (Number.isNaN(parsed)) {
+                    return { value: 0, isValid: false, isNaN: true };
+                }
+
+                // Case 4: Parse OK nhưng qty = 0
+                if (parsed === 0) {
+                    return { value: 0, isValid: false, isNaN: false };
+                }
+
+                // Case 5: Giá trị âm — bất thường, treat như lỗi
+                if (parsed < 0) {
+                    return { value: 0, isValid: false, isNaN: true };
+                }
+
+                return { value: parsed, isValid: true, isNaN: false };
+            }
+
+            /**
+             * TASK 4: Xây dựng row cơ sở — đọc plant/unit/sloc từ materialRow, KHÔNG hardcode
+             */
+            function buildBaseRow(item, materialInfo, customerInfo, extraMeta) {
+                const { fileName, processTime, poData } = extraMeta;
+                const sapCode = materialInfo
+                    ? String(materialInfo['Mã SAP'] || materialInfo['sap_material_code'] || materialInfo['Material'] || '').trim()
+                    : '';
+                const sapName = materialInfo
+                    ? String(materialInfo['Tên sản phẩm'] || materialInfo['sap_material_name'] || materialInfo['Tên SKU'] || item.raw_description || '').trim()
+                    : String(item.raw_description || '').trim();
+
+                const articleCodeRaw = item.raw_article_code ? String(item.raw_article_code).trim() : '';
+
+                // Bỏ qua báo lỗi mapping SAP theo yêu cầu User
+                let reason = '';
+                // if (!materialInfo && !customerInfo) reason = 'Không tìm thấy KH';
+                // else if (!customerInfo) reason = 'Không tìm thấy Khách hàng (Store)';
+
+                return {
+                    "Source File": fileName,
+                    "Page": item.page_no || 1,
+                    "Status": 'Extracted', // Bỏ trạng thái UNMATCHED
+                    "Lý do báo lỗi": reason,
+                    "Mã SKU Gốc": articleCodeRaw,
+                    "Tên SP Gốc (Hóa đơn)": item.raw_description || '',
+                    "Date Ngày PO": poData.po_date_raw || '',
+                    "SaleOrder ID": '',
+                    "Order Type": materialInfo?.order_type || customerInfo?.order_type || 'ZOR',
+                    "Sale Org": customerInfo?.sale_org || '',
+                    "Dist. Channel": customerInfo?.dist_channel || '',
+                    "Division": materialInfo?.division || customerInfo?.division || '',
+                    "Sold-to (Pháp nhân)": customerInfo?.sold_to_code ? `'${customerInfo.sold_to_code}` : (poData.sold_to_hint || poData.store_raw_info || ''),
+                    "Ship-to (ĐC giao hàng)": customerInfo?.ship_to_code ? `'${customerInfo.ship_to_code}` : (poData.store_raw_info || ''),
+                    "Cust. Reference (Số PO)": poData.po_number ? `'${poData.po_number}` : '',
+                    "Material": sapCode ? `'${sapCode}` : (articleCodeRaw ? `'${articleCodeRaw}` : ''),
+                    "BarCode Mã vạch": articleCodeRaw ? `'${articleCodeRaw}` : '',
+                    "Tên Sku": sapName || item.raw_description || '',
+                    "Order Quantity": 0,
+                    // TASK 4: Đọc từ materialRow thay vì hardcode
+                    "Unit": materialInfo?.base_uom || materialInfo?.unit_sap || materialInfo?.Unit || item.unit_raw || '',
+                    "Plant": materialInfo?.plant || '',
+                    "Sloc": '',
+                    "Batch. No": '',
+                    "Billing line note (HDDT)": '',
+                    "Sale Employee": customerInfo?.sale_employee || '',
+                    "WBS Element": '',
+                    "Người mua hàng": customerInfo?.sold_to_name || '',
+                    "MÃ số thuế": '',
+                    "Đơn vị mua hàng": '',
+                    "Địa chỉ": '',
+                    "Mã số thuế ": '',
+                    "Sales document notes": poData.document_note_raw || '',
+                    "Delivery document notes": '',
+                    "Billing document notes (HDDT)": '',
+                    "Mã vận đơn": '',
+                    "Link file vận đơn": '',
+                    "Ghi chú DVKH header": '',
+                    "Ngày YC giao hàng DD/MM/YYYY": '',
+                    "Lý do hủy đơn": '',
+                    "Sale Org ": '',
+                    "Sale Office": customerInfo?.sale_office || '',
+                    "Số điện thoại": '',
+                    "Người nhận hàng": customerInfo?.ship_to_name || '',
+                    "Địa chỉ giao hàng": '',
+                    "Thời gian xử lý (Giây)": processTime
+                };
+            }
+
+            /**
+             * Chuyển đổi JSON raw từ AI sang mảng object 38 cột SAP — v2.0
+             */
+            function mapRawToSAP(rawJson, vendorChain, fileName, processTime) {
+                const sapRows = [];
+
+                // ===== TASK 1: CUSTOMER LOOKUP V2.0 =====
+                let customerInfo = null;
+                let customerStatus = 'NO_MATCH';
+                let customerAmbiguous = '';
+
+                // Customer Lookup → resolveSoldTo (tự động override nếu vendor không có sold_to)
+                const rawLookup = (customerMasterData.length > 0 && (rawJson.store_raw_info || rawJson.sold_to_hint))
+                    ? lookupCustomer(rawJson.store_raw_info, rawJson.sold_to_hint, customerMasterData, vendorChain)
+                    : { result: null, status: 'NO_MATCH', candidates: [] };
+
+                const resolved  = resolveSoldTo(rawJson, rawLookup, vendorChain);
+                customerInfo    = resolved.customerInfo;
+                customerStatus  = resolved.source === 'VENDOR_OVERRIDE' ? 'MATCHED'
+                    : resolved.source === 'UNMATCHED' ? 'NO_MATCH'
+                    : rawLookup.status;
+
+                if (resolved.warning) console.warn(`[resolveSoldTo] ${resolved.warning}`);
+
+                if (rawLookup.status === 'AMBIGUOUS') {
+                    customerStatus    = 'AMBIGUOUS';
+                    customerAmbiguous = rawLookup.candidates.map(c => c.sold_to_code || c.store_keyword || '?').join(', ');
+                    console.warn(`[Customer AMBIGUOUS] "${rawJson.store_raw_info}" khớp ${rawLookup.candidates.length} dòng`);
+                }
+
+                // Debug: In headers Material Master lần đầu (Xóa theo yêu cầu)
+
+                // ===== ITEM LOOP =====
+                const rawItems = rawJson.items || [];
+                const extraMeta = { fileName, processTime, poData: rawJson };
+
+                rawItems.forEach((item) => {
+
+                    // ===== TASK 2: MATERIAL LOOKUP V2.0 =====
+                    let materialInfo = null;
+                    const articleCode = item.raw_article_code ? String(item.raw_article_code).trim().toLowerCase() : '';
+
+                    if (materialMasterData.length > 0 && articleCode) {
+                        const targetChain = (vendorChain || '').trim();
+                        const allHeaders  = Object.keys(materialMasterData[0]);
+
+                        // Bước 1: Dò tìm cột Vendor SKU theo TASK 2 (2-Tier Safe)
+                        const vendorCol = resolveVendorColumn(allHeaders, targetChain);
+                        if (vendorCol) {
+                            materialInfo = materialMasterData.find(m =>
+                                String(m[vendorCol] || '').trim().toLowerCase() === articleCode
+                            ) || null;
+                        }
+
+                        // Bước 2: Fallback Cột Barcode/Mã vạch (Exact match, không fuzzy)
+                        if (!materialInfo) {
+                            const barcodeCol = allHeaders.find(h => {
+                                const lh = h.toLowerCase();
+                                return lh.includes('vạch') || lh.includes('barcode');
+                            });
+                            if (barcodeCol) {
+                                materialInfo = materialMasterData.find(m =>
+                                    String(m[barcodeCol] || '').trim().toLowerCase() === articleCode
+                                ) || null;
+                            }
+                        }
+
+                        // Bước 3: Fallback chuẩn cũ (vendor_sku_code / barcode trường thẳng)
+                        if (!materialInfo) {
+                            materialInfo = materialMasterData.find(m => {
+                                if (m.vendor_sku_code && String(m.vendor_sku_code).trim().toLowerCase() === articleCode) return true;
+                                if (m.barcode && String(m.barcode).trim().toLowerCase() === articleCode) return true;
+                                return false;
+                            }) || null;
+                        }
+                    }
+
+                    // ===== TASK 3: SAFE SPLIT LINE =====
+                    const ordQty  = safeParseQty(item.ordered_qty);
+                    const freeQty = safeParseQty(item.free_qty);
+
+                    // Ưu tiên 1: Có NaN → cờ lỗi QTY_PARSE_ERROR
+                    if (ordQty.isNaN || freeQty.isNaN) {
+                        const row = buildBaseRow(item, materialInfo, customerInfo, extraMeta);
+                        row['Status'] = 'QTY_PARSE_ERROR';
+                        row['Billing line note (HDDT)'] = `Không parse được qty: ordered="${item.ordered_qty}" free="${item.free_qty}"`;
+                        row['Lý do báo lỗi'] = `Lỗi đọc Số lượng (Đặt: "${item.ordered_qty}", KM: "${item.free_qty}")` + (row['Lý do báo lỗi'] ? ` | ${row['Lý do báo lỗi']}` : '');
+                        if (customerStatus === 'AMBIGUOUS') {
+                            row['Status'] = 'CUSTOMER_AMBIGUOUS';
+                            row['Sale Employee'] = `⚠️ Ambiguous: ${customerAmbiguous}`;
+                            row['Lý do báo lỗi'] += ` | Trùng từ khoá KH (${customerAmbiguous})`;
+                        }
+                        sapRows.push(row);
+                        return;
+                    }
+
+                    // Ưu tiên 2: Cả 2 đều 0/null → cờ MISSING_QTY
+                    if (!ordQty.isValid && !freeQty.isValid) {
+                        const row = buildBaseRow(item, materialInfo, customerInfo, extraMeta);
+                        row['Status'] = 'MISSING_QTY';
+                        row['Lý do báo lỗi'] = `SL đặt và KM đều trống/zero` + (row['Lý do báo lỗi'] ? ` | ${row['Lý do báo lỗi']}` : '');
+                        if (customerStatus === 'AMBIGUOUS') {
+                            row['Status'] = 'CUSTOMER_AMBIGUOUS';
+                            row['Sale Employee'] = `⚠️ Ambiguous: ${customerAmbiguous}`;
+                            row['Lý do báo lỗi'] += ` | Trùng từ khoá KH (${customerAmbiguous})`;
+                        }
+                        sapRows.push(row);
+                        return;
+                    }
+
+                    // Ưu tiên 3: Bình thường — sinh dòng
+                    if (ordQty.isValid) {
+                        const row = buildBaseRow(item, materialInfo, customerInfo, extraMeta);
+                        row['Order Quantity'] = ordQty.value;
+                        row['Sloc'] = materialInfo?.sloc_order || 'O1B1';
+                        if (customerStatus === 'AMBIGUOUS') {
+                            row['Status'] = 'CUSTOMER_AMBIGUOUS';
+                            row['Sale Employee'] = `⚠️ Ambiguous: ${customerAmbiguous}`;
+                            row['Lý do báo lỗi'] += (row['Lý do báo lỗi'] ? ` | ` : '') + `Trùng từ khoá KH (${customerAmbiguous})`;
+                        } else if (customerStatus === 'NO_MATCH') {
+                            row['Status'] = 'CUSTOMER_UNMATCHED';
+                        }
+                        sapRows.push(row);
+                    }
+
+                    if (freeQty.isValid) {
+                        const rowKM = buildBaseRow(item, materialInfo, customerInfo, extraMeta);
+                        rowKM['Order Quantity'] = freeQty.value;
+                        rowKM['Sloc'] = materialInfo?.sloc_free || 'O1KM';
+                        rowKM['Tên Sku'] = (rowKM['Tên Sku'] || '') + ' - Hàng KM';
+                        if (customerStatus === 'AMBIGUOUS') {
+                            rowKM['Status'] = 'CUSTOMER_AMBIGUOUS';
+                            rowKM['Sale Employee'] = `⚠️ Ambiguous: ${customerAmbiguous}`;
+                            rowKM['Lý do báo lỗi'] += (rowKM['Lý do báo lỗi'] ? ` | ` : '') + `Trùng từ khoá KH (${customerAmbiguous})`;
+                        } else if (customerStatus === 'NO_MATCH') {
+                            rowKM['Status'] = 'CUSTOMER_UNMATCHED';
+                        }
+                        sapRows.push(rowKM);
+                    }
+                });
+
+                return sapRows;
+            }
+
+            // TASK 5B: Extract JSON block an toàn từ AI response string
+            function safeParseJson(rawText) {
+                const match = rawText.match(/\{[\s\S]*\}/);
+                if (!match) return null;
+                try { return JSON.parse(match[0]); } catch { return null; }
+            }
+
+            /**
+             * TASK 6: Validate Material Master trước khi import vào bộ nhớ
+             * Bắt: SAP code trống, SAP code trùng, EAN-13 sai định dạng
+             * @returns {{ valid: Object[], errors: string[], warnings: string[] }}
+             */
+            function validateMaterialMaster(rows) {
+                const seen   = new Map();
+                const valid  = [];
+                const errors = [];
+                const warnings = [];
+
+                for (let i = 0; i < rows.length; i++) {
+                    const row    = Object.assign({}, rows[i]);
+                    const rowNum = i + 2; // +2 vì row 1 là header Excel
+
+                    // Trim toàn bộ string values
+                    for (const key of Object.keys(row)) {
+                        if (typeof row[key] === 'string') row[key] = row[key].trim();
+                    }
+
+                    const sapCode = String(row['Mã SAP'] || row.sap_code || row.sap_material_code || row.Material || '').trim();
+
+                    // Lỗi cứng: không có SAP code → block
+                    if (!sapCode) {
+                        errors.push(`Dòng ${rowNum}: Thiếu Mã SAP (để trống)`);
+                        continue;
+                    }
+
+                    // Lỗi cứng: SAP code trùng → block
+                    if (seen.has(sapCode)) {
+                        errors.push(`Dòng ${rowNum}: Trùng Mã SAP "${sapCode}" với dòng ${seen.get(sapCode)}`);
+                        continue;
+                    }
+
+                    // Cảnh báo mềm: EAN barcode sai định dạng (13 chữ số)
+                    const barcode = String(row['Mã vạch'] || row.barcode || '').trim();
+                    if (barcode && !/^\d{13}$/.test(barcode)) {
+                        warnings.push(`Dòng ${rowNum}: Mã vạch "${barcode}" không đúng EAN-13`);
+                    }
+
+                    seen.set(sapCode, rowNum);
+                    row._imported_at = new Date().toISOString();
+                    valid.push(row);
+                }
+
+                return { valid, errors, warnings };
+            }
+
+
+
+
+
+
+            // ================================================================
+            // TẦNG OCR AI — extractRawOCR v2.0 (Dynamic Prompting)
+            // Gọi Gemini Vision API, tự inject từ điển động theo vendor_chain
+            // ================================================================
+
+            /**
+             * Build system prompt theo spec Tech v2.0
+             * @param {string|null} vendorHint - Tên chuỗi siêu thị nếu đã biết trước (pre-pass)
+             */
+            function buildSystemPrompt(vendorHint) {
+                const STATIC_PROMPT = `Bạn là hệ thống OCR chuyên biệt cho Purchase Order (Đơn đặt hàng) của các chuỗi siêu thị Việt Nam. Nhiệm vụ: Đọc ảnh/PDF PO và trả về JSON array chuẩn.
+
+## CẤU TRÚC JSON MỖI LINE ITEM
+Mỗi dòng hàng trên PO phải được trích xuất thành 1 object JSON sau:
+{
+  "po_number":        <Số PO / Số đơn hàng - string>,
+  "vendor_chain_raw": <Tên chuỗi siêu thị nhận diện từ logo/header - string hoặc null>,
+  "store_raw_info":   <Thông tin điểm GIAO HÀNG (SHIP-TO): mã cửa hàng + tên + địa chỉ - NGUYÊN VĂN>,
+  "sold_to_hint":     <Thông tin bên ĐẶT HÀNG (SOLD-TO) - nếu có>,
+  "raw_article_code": <Mã hàng nguyên gốc: barcode EAN-13, mã nội bộ, SKU - KHÔNG normalize>,
+  "po_date_raw":      <Ngày PO hoặc ngày giao hàng yêu cầu - ưu tiên YYYY-MM-DD, nếu không rõ để nguyên>,
+  "raw_description":  <Tên hàng hóa chính xác như trên ảnh>,
+  "ordered_qty":      <Số lượng đặt hàng - chuỗi nguyên gốc, kể cả dấu phẩy>,
+  "free_qty":         <Số lượng tặng/KM hoặc null nếu không có>,
+  "unit_raw":         <Đơn vị tính: CS, PC, KG, thùng...>,
+  "net_price":        <Đơn giá nếu hiển thị, hoặc null>,
+  "document_note_raw":<Ghi chú đặc biệt của toàn bộ PO nếu có, hoặc null>,
+  "page_no":          <Số trang trong file, bắt đầu từ 1>
+}
+
+## BẢNG NHẬN DIỆN LABEL THEO TỪNG CHUỖI SIÊU THỊ
+BẢNG LUẬT TRÍCH XUẤT (VENDOR_RULESET):
+${JSON.stringify(VENDOR_RULESET, null, 2)}
+
+Bước 3 — Trích xuất:
+Dựa vào đúng từ khóa trong RULESET của vendor đó. Nếu sold_to = "N/A" → gán null, không bịa.
+
+## QUY TẮC BẮT BUỘC (7 RULES - KHÔNG ĐƯỢC VI PHẠM)
+
+RULE 1 — ZERO HALLUCINATION:
+Chỉ ghi những gì NHÌN THẤY trên ảnh. Nếu không thấy: điền null. TUYỆT ĐỐI không suy đoán mã hàng, số lượng, hay ngày tháng.
+
+RULE 2 — NHẬN DIỆN VENDOR TỪ LOGO/HEADER:
+Bước 1: Nhìn vào header/logo của PO (góc trên trái hoặc phải).
+Xác định vendor_chain_raw (WinMart / BigC / Coop / Aeon ...).
+Dùng đúng bộ label của vendor đó theo bảng trên.
+Nếu không nhận diện được: vendor_chain_raw = null, dùng bộ DEFAULT.
+
+RULE 3 — store_raw_info là SHIP-TO (nơi NHẬN hàng):
+Lấy thông tin điểm GIAO HÀNG, không phải bên đặt hàng.
+NGUYÊN VĂN toàn bộ text: mã cửa hàng + tên + địa chỉ nếu có.
+Đây là key để hệ thống map sang SAP Ship-to code — sai sẽ phá hỏng toàn bộ đơn.
+
+RULE 4 — raw_article_code là MÃ NGUYÊN GỐC:
+Lấy ĐÚNG như trên ảnh. KHÔNG normalize, KHÔNG thêm/bớt ký tự.
+Backend sẽ tự map sang SAP Material Code.
+
+RULE 5 — XỬ LÝ SỐ LƯỢNG:
+- 2 cột riêng biệt (OU Qty + Free Qty): ordered_qty = hàng bán, free_qty = hàng tặng.
+- "100+10" hoặc "100 (10)": ordered_qty="100", free_qty="10".
+- Chỉ 1 cột: free_qty = null.
+- Dấu phẩy hàng nghìn ("1,416"): trả về chuỗi nguyên gốc "1,416".
+
+RULE 6 — NGÀY THÁNG:
+Ưu tiên format YYYY-MM-DD. Nếu không chắc: trả về nguyên gốc như trên ảnh.
+
+RULE 7 — OUTPUT FORMAT:
+Trả về JSON array thuần túy. KHÔNG markdown backtick, KHÔNG giải thích, KHÔNG text thừa.
+Mỗi phần tử = 1 line item. Thông tin header (po_number, store_raw_info, po_date_raw) lặp lại ở MỖI phần tử.`;
+
+                // Inject dynamic dictionary nếu có
+                const dynamicSection = buildDynamicPrompt(vendorHint);
+                if (dynamicSection) {
+                    return STATIC_PROMPT + `
+
+---
+## TỪ ĐIỂN ĐỘNG — ƯU TIÊN DÙNG KHI ĐỌC FILE NÀY
+${dynamicSection}
+Khi có đoạn từ điển này: ưu tiên dùng các label trong TỪ ĐIỂN ĐỘNG thay cho DEFAULT.`;
+                }
+                return STATIC_PROMPT;
+            }
+
+            /**
+             * Gọi Gemini Vision API với timeout 30s + retry 1 lần
+             * @returns {{ rawJson: Object, usageMetadata: Object }}
+             */
+            async function extractRawOCR(fileName, mimeType, base64Data, apiKey, vendorHint = null) {
+                const MAX_RETRIES = 3;
+                const TIMEOUT_MS  = 30000;
+                let currentModel  = 'gemini-2.5-flash';
+
+                const systemPrompt = buildSystemPrompt(vendorHint);
+
+                const requestBody = {
+                    system_instruction: { parts: [{ text: systemPrompt }] },
+                    contents: [{
+                        parts: [
+                            {
+                                inline_data: {
+                                    mime_type: mimeType,
+                                    data: base64Data
+                                }
+                            },
+                            {
+                                text: 'Đọc toàn bộ PO trong ảnh/PDF này. Trả về JSON array theo đúng cấu trúc đã định nghĩa. Bắt đầu bằng [ và kết thúc bằng ].'
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        temperature: 0,
+                        responseMimeType: 'application/json'
+                    }
+                };
+
+                let lastError = null;
+                for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                    try {
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+                        const controller = new AbortController();
+                        const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(requestBody),
+                            signal: controller.signal
+                        });
+                        clearTimeout(timeoutId);
+
+                        if (!response.ok) {
+                            const errText = await response.text();
+                            const status = response.status;
+                            // Tự động Fallback xuống model cũ hơn nếu hết quota hoặc model bị xoá
+                            if ((status === 429 || status === 404 || status === 503) && currentModel === 'gemini-2.5-flash') {
+                                console.warn(`[OCR] Model ${currentModel} returned ${status}. Auto-fallback to gemini-1.5-flash.`);
+                                currentModel = 'gemini-1.5-flash';
+                            }
+                            throw new Error(`HTTP ${status}: ${errText.substring(0, 200)}`);
+                        }
+
+                        const data = await response.json();
+                        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                        const usageMetadata = data?.usageMetadata || null;
+
+                        // Parse JSON array từ response
+                        let parsed = null;
+                        // Thử parse trực tiếp nếu responseMimeType=json
+                        try { parsed = JSON.parse(rawText); } catch { /* fallthrough */ }
+
+                        // Fallback: tìm [...] trong raw text
+                        if (!parsed) {
+                            const arrMatch = rawText.match(/\[[\s\S]*\]/);
+                            if (arrMatch) {
+                                try { parsed = JSON.parse(arrMatch[0]); } catch { /* fallthrough */ }
+                            }
+                        }
+
+                        // Fallback: tìm {...} (AI trả về 1 object thay vì array)
+                        if (!parsed) {
+                            const objMatch = rawText.match(/\{[\s\S]*\}/);
+                            if (objMatch) {
+                                try {
+                                    const obj = JSON.parse(objMatch[0]);
+                                    parsed = obj.items || [obj]; // items[] nếu có, hoặc wrap trong array
+                                } catch { /* fallthrough */ }
+                            }
+                        }
+
+                        if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
+                            console.warn(`[OCR] Attempt ${attempt}: AI trả về rỗng hoặc không phải array.`, rawText.substring(0, 500));
+                            throw new Error('AI không trích xuất được dữ liệu từ file này.');
+                        }
+
+                        // Normalize: map từng item thành object chuẩn
+                        const normalizedItems = parsed.map((item, idx) => ({
+                            po_number:         item.po_number        || null,
+                            vendor_chain_raw:  item.vendor_chain_raw || null,
+                            store_raw_info:    item.store_raw_info   || null,
+                            sold_to_hint:      item.sold_to_hint     || null,
+                            raw_article_code:  item.raw_article_code || null,
+                            po_date_raw:       item.po_date_raw || item.po_date || null,
+                            raw_description:   item.raw_description  || item.article_desc_raw || null,
+                            ordered_qty:       item.ordered_qty      ?? null,
+                            free_qty:          item.free_qty         ?? null,
+                            unit_raw:          item.unit_raw         || null,
+                            net_price:         item.net_price        || null,
+                            document_note_raw: item.document_note_raw || null,
+                            page_no:           item.page_no          || 1,
+                        }));
+
+                        // Build rawJson object tương thích với mapRawToSAP()
+                        const firstItem = normalizedItems[0];
+                        const rawJson = {
+                            po_number:         firstItem.po_number,
+                            vendor_chain_raw:  firstItem.vendor_chain_raw,
+                            store_raw_info:    firstItem.store_raw_info,
+                            sold_to_hint:      firstItem.sold_to_hint,
+                            po_date_raw:       firstItem.po_date_raw,
+                            document_note_raw: firstItem.document_note_raw,
+                            items:             normalizedItems,
+                        };
+
+                        console.log(`[OCR ✅] ${fileName} | Vendor: ${rawJson.vendor_chain_raw || 'UNKNOWN'} | Items: ${normalizedItems.length} | Attempt: ${attempt}`);
+                        return { rawJson, usageMetadata };
+
+                    } catch (err) {
+                        lastError = err;
+                        if (err.name === 'AbortError') {
+                            console.warn(`[OCR] Attempt ${attempt}: Timeout sau ${TIMEOUT_MS/1000}s.`);
+                        } else {
+                            console.warn(`[OCR] Attempt ${attempt} lỗi:`, err.message);
+                        }
+                        if (attempt < MAX_RETRIES) {
+                            await new Promise(r => setTimeout(r, 1500)); // chờ 1.5s rồi retry
+                        }
+                    }
+                }
+
+                throw new Error(`OCR thất bại sau ${MAX_RETRIES} lần thử: ${lastError?.message}`);
+            }
+
+
+            /**
+             * AI FUZZY MATCHER (Phase 2 - Vibe Coding)
+
+             * Dùng AI để khớp các dòng bị lỗi Mapping cứng
+             */
+            async function aiRefineMatches(unmatchedRows, customerMaster, materialMaster, apiKey) {
+                const prompt = `Bạn là Chuyên gia Đối soát Dữ liệu SAP.
+Tôi có một danh sách các dòng từ PO chưa khớp được với Master Data. Hãy dùng "vibe" và sự tương đồng để tìm ra dòng khớp nhất.
+
+DANH SÁCH CẦN KHỚP:
+${unmatchedRows.map((r, i) => `${i+1}. StoreRaw="${r['Sold-to (Pháp nhân)'] || ''}", MaterialRaw="${r['Mã SKU Gốc']} - ${r['Tên SP Gốc (Hóa đơn)']}"`).join('\n')}
+
+MASTER DATA (Mẫu):
+- Customers: ${JSON.stringify(customerMaster.slice(0, 50))}
+- Materials: ${JSON.stringify(materialMaster.slice(0, 50))}
+
+NHIỆM VỤ: Trả về JSON Array đúng cấu trúc dưới đây, chỉ bao gồm các dòng bạn tìm được kết quả khớp > 80%.
+[
+  {
+    "Mã SKU Gốc": "string",
+    "Tên SP Gốc (Hóa đơn)": "string",
+    "Material": "Mã SAP Vật tư",
+    "Tên Sku": "Tên SAP Vật tư",
+    "Sold-to (Pháp nhân)": "Mã SAP Khách hàng",
+    "Ship-to (ĐC giao hàng)": "Mã SAP Khách hàng",
+    "Status": "Extracted"
+  }
+]
+CHỈ TRẢ VỀ JSON, KHÔNG GIẢI THÍCH.`;
+
+                const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+                    })
+                });
+
+                if (!response.ok) return [];
+                const data = await response.json();
+                try {
+                    const text = data.candidates[0].content.parts[0].text;
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error("Lỗi parse AI Refine JSON:", e);
+                    return [];
+                }
+            }
+
+            /**
+             * AI DATA GUARD (Phase 2 - Anomaly Detection)
+             * Kiểm tra tính hợp lý của toàn bộ dữ liệu sau khi trích xuất
+             */
+            async function aiDataGuard(allRows, apiKey) {
+                if (!allRows.length) return [];
+                const sampleRows = allRows.map(r => ({
+                    sku: r["Tên Sku"],
+                    qty: r["Order Quantity"],
+                    sloc: r["Sloc"],
+                    date: r["Date Ngày PO"]
+                }));
+
+                const currentDate = new Date().toLocaleDateString('vi-VN');
+                const prompt = `Bạn là Kiểm soát viên O2C (Order-to-Cash). Hôm nay là ngày ${currentDate} (Định dạng DD/MM/YYYY).
+Hãy kiểm tra danh sách đơn hàng sau để tìm các bất thường (Anomaly Detection) như:
+1. Số lượng (qty) quá lớn bất thường (> 1000)
+2. Sloc (Warehouse) không khớp với loại hàng (Hàng KM phải là O1KM)
+
+DỮ LIỆU:
+${JSON.stringify(sampleRows)}
+
+TRẢ VỀ: JSON Array các cảnh báo. Mỗi cảnh báo gồm: { "row_index": number, "issue": "mô tả lỗi", "severity": "HIGH|MEDIUM" }
+CHỈ TRẢ VỀ JSON.`;
+
+                const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+                    })
+                });
+
+                if (!response.ok) return [];
+                const data = await response.json();
+                try {
+                    const text = data.candidates[0].content.parts[0].text;
+                    return JSON.parse(text);
+                } catch (e) {
+                    return [];
+                }
+            }
+
             // State & Elements
             let fileQueueData = [];
             let currentPreviewId = null;
+            let zoomLevel = 1; // Track current zoom level for PDF preview
             window.currentExtractedData = []; // Lưu trữ gộp data của MỌI file
             window.totalProcessTime = 0;
             window.totalApiCostVND = 0;
@@ -556,11 +1698,16 @@
                 if(item.file.type.startsWith('image/')) {
                     previewHTML = `<img src="${item.objUrl}" class="max-w-full max-h-full object-contain rounded drop-shadow-md">`;
                 } else if(item.file.type === 'application/pdf') {
-                    previewHTML = `<iframe src="${item.objUrl}#toolbar=0" class="w-full h-full border-0 rounded bg-white dark:bg-slate-800 shadow-sm" title="Bản xem trước PDF"></iframe>`;
+                    previewHTML = `<div class="relative w-full h-full"><iframe src="${item.objUrl}#toolbar=0" class="absolute inset-0 w-full h-full border-0 rounded bg-white dark:bg-slate-800 shadow-sm" title="Bản xem trước PDF" id="pdf-preview"></iframe></div>`;
                 } else {
                     previewHTML = `<p class="text-xs">Không có bản xem trước cho định dạng này.</p>`;
                 }
                 previewContainer.innerHTML = previewHTML;
+                
+                // Reset zoom level when previewing a new file
+                zoomLevel = 1;
+                updatePdfZoom();
+                
                 document.getElementById('docInfoLabel').innerHTML = `
                     <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400 truncate max-w-[300px]" title="${item.file.name}">
                         ${item.file.name}
@@ -638,18 +1785,18 @@
                 extractIcon.classList.add('animate-spin');
                 btnExtract.disabled = true;
 
-                tableBody.innerHTML = `
-                    <tr class="h-64">
-                        <td colspan="41" class="text-center bg-blue-50/10">
-                            <div class="flex flex-col items-center justify-center gap-3">
-                                <span class="material-symbols-outlined text-4xl text-primary animate-spin">cyclone</span>
-                                <p class="text-primary font-bold animate-pulse">Hệ thống đang chạy AI duyệt chứng từ...</p>
-                            </div>
-                        </td>
+                // Skeleton Loading for Data Grid (Senior Review Implementation)
+                tableBody.innerHTML = Array(5).fill(0).map(() => `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        ${Array(ALL_HEADERS.length).fill(0).map(() => `
+                            <td class="px-4 py-3 border-r border-b border-slate-200 dark:border-slate-800">
+                                <div class="h-4 skeleton rounded w-full opacity-60"></div>
+                            </td>
+                        `).join('')}
                     </tr>
-                `;
+                `).join('');
 
-                // Cơ chế xử lý Song Song (Concurrent Queue) - Tối đa 3 file cùng lúc
+                const vendorChainFromUI = document.getElementById('vendorSelect').value;
                 const CONCURRENCY_LIMIT = 3;
                 const queue = [...pendingFiles];
                 const inFlight = new Set();
@@ -664,30 +1811,83 @@
 
                     const startTime = performance.now();
                     try {
-                        const { jsonData, usageMetadata } = await extractDataWithGemini(item.file.name, item.file.type, item.base64, apiKey);
+                        // Trích xuất vendorHint từ tên file để Inject từ điển động
+                        let vendorHint = null;
+                        const fnLower = item.file.name.toLowerCase();
+                        if (fnLower.includes('winmart') || fnLower.includes('win')) vendorHint = 'WinMart';
+                        else if (fnLower.includes('bigc') || fnLower.includes('go')) vendorHint = 'BigC / GO!';
+                        else if (fnLower.includes('coop')) vendorHint = 'Coop';
+                        else if (fnLower.includes('aeon')) vendorHint = 'Aeon';
+                        else if (fnLower.includes('emart')) vendorHint = 'Emart';
+                        else if (fnLower.includes('mega')) vendorHint = 'Mega';
+                        else if (fnLower.includes('nam')) vendorHint = 'An Nam';
+                        else if (fnLower.includes('bibo')) vendorHint = 'Bibomart';
+                        else if (fnLower.includes('pharmacity')) vendorHint = 'Pharmacity';
+
+                        const { rawJson, usageMetadata } = await extractRawOCR(item.file.name, item.file.type, item.base64, apiKey, vendorHint);
                         const endTime = performance.now();
                         const processTime = ((endTime - startTime) / 1000).toFixed(2);
 
                         let fileCostVND = 0;
                         if(usageMetadata) {
-                            // Sử dụng đúcng key tử Gemini API (promptTokenCount + candidatesTokenCount)
                             const promptT = usageMetadata.promptTokenCount || 0;
                             const outputT = usageMetadata.candidatesTokenCount || (usageMetadata.totalTokenCount - promptT) || 0;
                             const inputCost  = (promptT  / 1000000) * 0.075;
                             const outputCost = (outputT / 1000000) * 0.30;
                             fileCostVND = (inputCost + outputCost) * 25500;
-                            console.log(`[COST] ${item.file.name}: Input=${promptT}tkn, Output=${outputT}tkn, Cost=ᄑ${Math.round(fileCostVND).toLocaleString('vi-VN')} VNĐ`);
+                            console.log(`[COST] ${item.file.name}: In=${promptT}tkn, Out=${outputT}tkn, Cost=₫${Math.round(fileCostVND).toLocaleString('vi-VN')} VNĐ`);
                         }
 
-                        jsonData.forEach(row => { row["Thời gian xử lý (Giây)"] = processTime; });
-                        item.extractedData = jsonData;
+                        // BƯỜC 2: Code Mapping (KHÔNG gọi AI lần 2)
+                        const vendorChain = rawJson.vendor_chain_raw || '';
+                        const sapRows = mapRawToSAP(rawJson, vendorChain, item.file.name, processTime);
+
+                        // Bỏ qua cảnh báo Toast theo yêu cầu
+                        // const unmatchedCount = sapRows.filter(r => r.Status === 'UNMATCHED').length;
+                        // if (unmatchedCount > 0) {
+                        //     showToast('error', `[${item.file.name}] ${unmatchedCount} sản phẩm chưa match được mã SAP — bôi đỏ trên bảng để kiểm tra.`);
+                        // }
+
+                        item.extractedData = sapRows;
                         item.status = 'success';
 
                         window.totalProcessTime += parseFloat(processTime);
                         window.totalApiCostVND += fileCostVND;
                         document.getElementById('totalTimeLabel').innerText = window.totalProcessTime.toFixed(2) + "s";
                         document.getElementById('totalCostLabel').innerText = Math.round(window.totalApiCostVND).toLocaleString('vi-VN') + " VNĐ";
-                        showToast('success', `Bóc tách thành công [${item.file.name}] (${jsonData.length} dòng).`);
+                        showToast('success', `Bóc tách xong [${item.file.name}] — ${sapRows.length} dòng SAP.`);
+
+                        // MODULE 2: Ghi log vào IndexedDB
+                        logExtraction({
+                            fileName     : item.file.name,
+                            customerName : sapRows[0]?.['Tên Sku'] || rawJson.vendor_chain_raw || '—',
+                            rows         : sapRows,
+                            processTime  : parseFloat(processTime),
+                            costVnd      : Math.round(fileCostVND),
+                            ocrError     : false,
+                        });
+
+                        // TASK: AI REFINEMENT (Phase 2 - Vibe Coding)
+                        // Nếu có dòng UNMATCHED, thử gọi AI một lần nữa để "vibe" kết quả từ Master Data
+                        const unmatchedRows = sapRows.filter(r => r.Status === 'UNMATCHED' || r.Status === 'CUSTOMER_UNMATCHED');
+                        if (unmatchedRows.length > 0 && apiKey) {
+                            console.log(`[AI REFINEMENT] Phát hiện ${unmatchedRows.length} dòng chưa khớp. Đang dùng AI để đối soát mờ...`);
+                            try {
+                                const refinedRows = await aiRefineMatches(unmatchedRows, customerMasterData, materialMasterData, apiKey);
+                                // Cập nhật lại sapRows với các kết quả đã được refine
+                                refinedRows.forEach(refined => {
+                                    const target = sapRows.find(r => r["Mã SKU Gốc"] === refined["Mã SKU Gốc"] && r["Tên SP Gốc (Hóa đơn)"] === refined["Tên SP Gốc (Hóa đơn)"]);
+                                    if (target && refined.Status === 'Extracted') {
+                                        Object.assign(target, refined);
+                                        target["Status"] = 'Extracted'; // Mark as fixed by AI
+                                        target["Lý do báo lỗi"] = '✨ AI Fuzzy Matched';
+                                    }
+                                });
+                            } catch (refineErr) {
+                                console.warn("[AI REFINEMENT] Thất bại:", refineErr);
+                            }
+                        }
+
                     } catch (error) {
                         console.error("Extraction error:", item.file.name, error);
                         item.status = 'error';
@@ -707,6 +1907,27 @@
                 const workers = Array.from({ length: Math.min(CONCURRENCY_LIMIT, pendingFiles.length) }, () => processNext());
                 await Promise.allSettled(workers);
 
+                // TASK: AI DATA GUARD (Anomaly Detection)
+                if (window.currentExtractedData.length > 0 && apiKey) {
+                    console.log("[AI DATA GUARD] Đang quét dữ liệu tìm bất thường...");
+                    try {
+                        const anomalies = await aiDataGuard(window.currentExtractedData, apiKey);
+                        if (anomalies.length > 0) {
+                            showToast('error', `Phát hiện ${anomalies.length} bất thường dữ liệu. Hãy kiểm tra các dòng bị cảnh báo.`);
+                            // Đánh dấu các dòng có bất thường (UI enhancement)
+                            anomalies.forEach(a => {
+                                if (window.currentExtractedData[a.row_index]) {
+                                    window.currentExtractedData[a.row_index]["Status"] = 'ANOMALY';
+                                    window.currentExtractedData[a.row_index]["Lý do báo lỗi"] = `🚨 ${a.issue}`;
+                                }
+                            });
+                            renderTable(window.currentExtractedData);
+                        }
+                    } catch (guardErr) {
+                        console.warn("[AI DATA GUARD] Thất bại:", guardErr);
+                    }
+                }
+
                 extractBtnText.innerText = oldText;
                 extractIcon.innerText = oldIcon;
                 extractIcon.classList.remove('animate-spin');
@@ -723,94 +1944,45 @@
                 }
             });
 
-            async function extractDataWithGemini(fileName, mimeType, base64Data, apiKey) {
-                // Hardcoded to gemini-2.5-flash - DO NOT auto-detect (risk of selecting expensive Pro model)
-                const MODEL_NAME = "models/gemini-2.5-flash";
-                console.log("Đang gọi API với Model:", MODEL_NAME);
-
-                // Construct Exact SAP JSON Output Keys Template
-                const OutputJSONFormatObj = {};
-                EXACT_EXCEL_HEADERS.forEach(k => OutputJSONFormatObj[k] = "");
-
-                const promptText = `BẠN LÀ CHUYÊN GIA NHẬP LIỆU SAP S/4HANA NGÀNH FMCG. BÓC TÁCH CHỨNG TỪ THEO 5 LUẬT NGHIÊM NGẶT QUA JSON:
-
-1. CHUẨN HÓA NGÀY THÁNG (STRICT DATE): 
-- Mọi cột ngày (Ngày YC giao hàng DD/MM/YYYY, Date Ngày PO...) BẮT BUỘC định dạng "DD/MM/YYYY". 
-- (Ví dụ: 08/02/26 phải xuất ra "08/02/2026").
-- Lọc bỏ phần giờ phút: Nếu chứng từ ghi "02/02/26 14:23", chỉ lấy "02/02/2026".
-
-2. CHỐNG NHẢY SỐ MŨ EXCEL (SCIENTIFIC NOTATION):
-- Các cột: SaleOrder ID, Cust. Reference (Số PO), BarCode Mã vạch.
-- BẮT BUỘC thêm một dấu nháy đơn (') vào NGAY TRƯỚC chuỗi số. (Ví dụ: '2605053866795).
-
-3. LÀM SẠCH KÝ TỰ OCR (CLEAN TEXT):
-- Tự sửa lỗi quang học vô lý trên Tên SKU (vd: "80aGk" -> "800G"). Bỏ ký tự rác.
-
-4. LUẬT TÁCH DÒNG FMCG:
-- Hàng bán: Sloc='O1B1'. 
-- Hàng tặng (Free Qty): Nếu có hàng khuyến mãi, BẮT BUỘC sinh ra 1 object riêng, Sloc='O1KM', và nối thêm " - Hàng KM" vào Tên Sku.
-
-5. ZERO HALLUCINATION:
-- CHỈ trả về JSON Array hợp lệ, KHÔNG giải thích thêm.
-- Mỗi object PHẢI có ĐỦ CÁC KEY sau (theo đúng thứ tự):
-"Source File", "Page", "Status", "Date Ngày PO", "SaleOrder ID", "Order Type", "Sale Org", "Dist. Channel", "Division", "Sold-to (Pháp nhân)", "Ship-to (ĐC giao hàng)", "Cust. Reference (Số PO)", "Material", "BarCode Mã vạch", "Tên Sku", "Order Quantity", "Unit", "Plant", "Sloc", "Batch. No", "Billing line note (HDDT)", "Sale Employee", "WBS Element", "Người mua hàng", "MÃ số thuế", "Đơn vị mua hàng", "Địa chỉ", "Mã số thuế ", "Sales document notes", "Delivery document notes", "Billing document notes (HDDT)", "Mã vận đơn", "Link file vận đơn", "Ghi chú DVKH header", "Ngày YC giao hàng DD/MM/YYYY", "Lý do hủy đơn", "Sale Org ", "Sale Office", "Số điện thoại", "Người nhận hàng", "Địa chỉ giao hàng"
-
-Giá trị mặc định: Source File="${fileName}", Page=Số trang, Status="Extracted", Sale Org="1000", Dist. Channel="10", Plant="V001". Các trường không có trong chứng từ để chuỗi rỗng "".`;
 
 
-                let url = "https://generativelanguage.googleapis.com/v1beta/" + MODEL_NAME + ":generateContent?key=" + apiKey;
-                
-                let response = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                { text: promptText },
-                                { inline_data: { mime_type: mimeType, data: base64Data } }
-                            ]
-                        }],
-                        generationConfig: {
-                            temperature: 0.1, 
-                            responseMimeType: "application/json"
-                        }
-                    })
-                });
 
-                if (response.status === 429 || response.status === 404) {
-                    console.log("Gemini 2.5 Flash failed (404/429) -> Falling back to Gemini 1.5 Flash Stable");
-                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
-                    response = await fetch(url, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            contents: [{
-                                parts: [
-                                    { text: promptText },
-                                    { inline_data: { mime_type: mimeType, data: base64Data } }
-                                ]
-                            }],
-                            generationConfig: {
-                                temperature: 0.1, 
-                                responseMimeType: "application/json"
-                            }
-                        })
-                    });
+
+
+
+            // PDF Zoom functionality
+            function updatePdfZoom() {
+                const pdfPreview = document.getElementById('pdf-preview');
+                if (pdfPreview) {
+                    pdfPreview.style.transform = `scale(${zoomLevel})`;
+                    pdfPreview.style.transformOrigin = 'top left';
                 }
-
-                if (!response.ok) {
-                    const errRes = await response.text();
-                    throw new Error("API Error " + response.status + ": " + errRes);
-                }
-
-                const data = await response.json();
-                const rawText = data.candidates[0].content.parts[0].text;
-                const jsonStr = rawText.replace(/```json|```/g, '').trim();
-                return {
-                    jsonData: JSON.parse(jsonStr),
-                    usageMetadata: data.usageMetadata
-                };
             }
+
+            // Add zoom button event listeners — Find by icon text content (vanilla JS)
+            const zoomInBtn = Array.from(document.querySelectorAll('button')).find(b => {
+                const icon = b.querySelector('span.material-symbols-outlined');
+                return icon && icon.textContent.trim() === 'zoom_in';
+            });
+            zoomInBtn?.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (currentPreviewId && fileQueueData.some(f => f.id === currentPreviewId && f.file.type === 'application/pdf')) {
+                    zoomLevel = Math.min(zoomLevel + 0.25, 3);
+                    updatePdfZoom();
+                }
+            });
+
+            const zoomOutBtn = Array.from(document.querySelectorAll('button')).find(b => {
+                const icon = b.querySelector('span.material-symbols-outlined');
+                return icon && icon.textContent.trim() === 'zoom_out';
+            });
+            zoomOutBtn?.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (currentPreviewId && fileQueueData.some(f => f.id === currentPreviewId && f.file.type === 'application/pdf')) {
+                    zoomLevel = Math.max(zoomLevel - 0.25, 0.5);
+                    updatePdfZoom();
+                }
+            });
 
             // --- 3. RENDER TABLE ---
             function renderTable(dataArray) {
@@ -818,28 +1990,60 @@ Giá trị mặc định: Source File="${fileName}", Page=Số trang, Status="Ex
                 window.currentExtractedData = dataArray; 
 
                 if (!Array.isArray(dataArray) || dataArray.length === 0) {
-                    tableBody.innerHTML = `<tr><td colspan="41" class="text-center p-8 text-slate-500">AI Không xuất ra được dữ liệu nào.</td></tr>`;
+                    tableBody.innerHTML = `
+                        <tr class="h-full">
+                            <td class="p-20 text-center" colspan="${ALL_HEADERS.length}">
+                                <div class="flex flex-col items-center gap-4 opacity-40">
+                                    <span class="material-symbols-outlined text-6xl">database_off</span>
+                                    <p class="text-sm font-bold uppercase tracking-widest">Chưa có dữ liệu trích xuất</p>
+                                    <p class="text-xs">Vui lòng tải tệp PDF và nhấn "Trích xuất AI" để bắt đầu.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
                     return;
                 }
 
                 dataArray.forEach((rowObj, index) => {
                     const tr = document.createElement('tr');
                     tr.className = "hover:bg-primary/5 transition-colors group";
+                    tr.setAttribute('data-row-index', index);
                     
                     ALL_HEADERS.forEach(key => {
                         const td = document.createElement('td');
                         td.className = "px-4 py-3 text-xs text-slate-600 dark:text-slate-400 border-r border-b border-slate-200 dark:border-slate-800 outline-none whitespace-nowrap truncate max-w-[300px]";
+                        td.setAttribute('data-column', key);
                         
                         let displayVal = (rowObj[key] !== undefined && rowObj[key] !== null) ? rowObj[key] : '';
                         
+                        // Bôi màu theo Status
+                        const rowStatus = rowObj["Status"] || '';
+                        if (rowStatus === 'UNMATCHED' || rowStatus === 'CUSTOMER_UNMATCHED') tr.classList.add('bg-red-50', 'dark:bg-red-900/10');
+                        if (rowStatus === 'CUSTOMER_AMBIGUOUS') tr.classList.add('bg-yellow-50', 'dark:bg-yellow-900/10');
+
                         if (UI_HEADERS.includes(key)) {
                             td.classList.add('bg-slate-50/50', 'dark:bg-slate-800/20');
-                            if(key === "Status" && displayVal === "Extracted") {
-                                td.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 uppercase tracking-tighter">${displayVal}</span>`;
+                            if(key === "Status") {
+                                const statusBadges = {
+                                    'Extracted': `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase tracking-tighter">✓ Extracted</span>`,
+                                    'UNMATCHED': `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-tighter">⚠ UNMATCHED</span>`,
+                                    'CUSTOMER_UNMATCHED': `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-200 text-red-800 uppercase tracking-tighter">⚠ NO CUSTOMER</span>`,
+                                    'CUSTOMER_AMBIGUOUS': `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-100 text-yellow-800 uppercase tracking-tighter">⚡ AMBIGUOUS</span>`,
+                                    'MISSING_QTY': `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 uppercase tracking-tighter">⊘ NO QTY</span>`,
+                                    'QTY_PARSE_ERROR': `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-200 text-rose-900 uppercase tracking-tighter">✗ PARSE ERR</span>`,
+                                };
+                                if (statusBadges[displayVal]) {
+                                    td.innerHTML = statusBadges[displayVal];
+                                    if (displayVal === 'MISSING_QTY') tr.classList.add('bg-orange-50', 'dark:bg-orange-900/10');
+                                    if (displayVal === 'QTY_PARSE_ERROR') tr.classList.add('bg-rose-50', 'dark:bg-rose-900/10');
+                                } else {
+                                    td.innerText = displayVal;
+                                }
                             } else {
                                 if(key==="Page") td.classList.add('text-center', 'font-bold');
                                 td.innerText = displayVal;
                             }
+
                         } else {
                             td.setAttribute('contenteditable', 'true');
                             td.classList.add('focus:bg-white', 'dark:focus:bg-slate-800');
@@ -870,9 +2074,7 @@ Giá trị mặc định: Source File="${fileName}", Page=Số trang, Status="Ex
                 // Delete UI Columns
                 const cleanedData = exportDataList.map(row => {
                     const newRow = { ...row };
-                    delete newRow['Source File'];
-                    delete newRow['Page'];
-                    delete newRow['Status'];
+                    UI_HEADERS.forEach(uiH => delete newRow[uiH]);
                     return newRow;
                 });
                 
@@ -897,7 +2099,540 @@ Giá trị mặc định: Source File="${fileName}", Page=Số trang, Status="Ex
             document.getElementById('btnSyncSAP').addEventListener('click', () => {
                 showToast('error', 'Tính năng đang phát triển trong Phase 2');
             });
+            
+            // PDF Zoom functionality
+            function updatePdfZoom() {
+                const pdfPreview = document.getElementById('pdf-preview');
+                if (pdfPreview) {
+                    pdfPreview.style.transform = `scale(${zoomLevel})`;
+                    pdfPreview.style.transformOrigin = 'top left';
+                }
+            }
+
+
+
+        } catch(err) {
+            console.error('[VitaDairy] Lỗi khởi tạo hệ thống:', err);
+            alert('Lỗi JS: ' + err.message + '\n(Dòng: ' + err.lineNumber + ')\nMở F12 → Console để xem chi tiết.');
+        }
         });
+
+        // ================================================================
+        // MODULE 1: DYNAMIC DICTIONARY — PromptBuilder Engine
+        // ================================================================
+        const DICT_STORAGE_KEY = 'vitadairy_prompt_dictionaries_v3';
+
+        const DEFAULT_DICTIONARIES = [
+            {
+                vendor_chain: 'DEFAULT',
+                is_active: true,
+                sold_to_keys: ['Bill To', 'Người mua', 'Ordered By'],
+                ship_to_keys: ['DELIVER TO', 'Giao đến', 'Ship To'],
+                po_number_keys: ['Số đơn hàng', 'PO No.', 'Order ID', 'Purchase Order', 'Số PO'],
+                store_keys: ['Tạo bởi', 'Mã Cửa Hàng', 'Store', 'Cửa hàng', 'Chi nhánh'],
+                material_keys: ['Mã vạch', 'Barcode', 'Article', 'EAN', 'Mã SP', 'SKU'],
+                date_keys: ['Ngày giao hàng', 'Est. Delivery date', 'Delivery Date', 'Ngày đặt hàng', 'Date']
+            },
+            {
+                vendor_chain: 'Aeon',
+                is_active: true,
+                sold_to_keys: ['Logo Aeon'],
+                ship_to_keys: ['Để giao hàng'],
+                po_number_keys: ['Số đơn hàng'],
+                store_keys: ['Tạo bởi'],  
+                material_keys: ['Mã vạch'],
+                date_keys: ['Ngày giao hàng:']
+            },
+            {
+                vendor_chain: 'An Nam',
+                is_active: true,
+                sold_to_keys: [],
+                ship_to_keys: ['Address'],
+                po_number_keys: ['Order ID'],
+                store_keys: ['DELIVER TO', 'GIAO ĐẾN'],
+                material_keys: ['Barcode'],
+                date_keys: ['Est. Delivery date']
+            },
+            {
+                vendor_chain: 'BigC / GO!',
+                is_active: true,
+                sold_to_keys: ['Ordered By'],
+                ship_to_keys: ['Delivered To'],
+                po_number_keys: ['Order No'],
+                store_keys: ['Delivered To'],
+                material_keys: ['Article'],
+                date_keys: ['Delivery Date To Store']
+            },
+            {
+                vendor_chain: 'Coop',
+                is_active: true,
+                sold_to_keys: ['Bill To:'],
+                ship_to_keys: ['Ship To'],
+                po_number_keys: ['P/O Number'],
+                store_keys: ['P/O Location'],
+                material_keys: ['SKU Number'],
+                date_keys: ['Expected Receipt Date']
+            },
+            {
+                vendor_chain: 'Emart',
+                is_active: true,
+                sold_to_keys: ['Delivery to'],
+                ship_to_keys: [],
+                po_number_keys: ['PO No.'],
+                store_keys: [],
+                material_keys: ['Unit Barcode'],
+                date_keys: []
+            },
+            {
+                vendor_chain: 'Mega',
+                is_active: true,
+                sold_to_keys: ['Người mua: Tên'],
+                ship_to_keys: ['Địa điểm giao hàng : Tên'],
+                po_number_keys: ['Số thứ tự đơn đặt hàng'],
+                store_keys: [],
+                material_keys: ['EAN sản phẩm'],
+                date_keys: ['Giao hàng ngày']
+            },
+            {
+                vendor_chain: 'Bibomart',
+                is_active: true,
+                sold_to_keys: ['Logo BiBomart'],
+                ship_to_keys: ['Địa chỉ nhận hàng'],
+                po_number_keys: ['Mã đơn'],
+                store_keys: [],
+                material_keys: ['Mã SP'],
+                date_keys: []
+            },
+            {
+                vendor_chain: 'Pharmacity',
+                is_active: true,
+                sold_to_keys: ['Logo Pharmacity'],
+                ship_to_keys: ['Delivery address'],
+                po_number_keys: ['PO number'],
+                store_keys: [],
+                material_keys: ['Print code'],
+                date_keys: []
+            },
+            {
+                vendor_chain: 'WinMart',
+                is_active: true,
+                sold_to_keys: [],
+                ship_to_keys: ['DELIVER TO'],
+                po_number_keys: ['Số đơn hàng', 'PO Number'],
+                store_keys: ['Mã Cửa Hàng'],
+                material_keys: ['Barcode', 'Article Code'],
+                date_keys: ['Est. Delivery date']
+            }
+        ];
+
+        function dictLoad() {
+            const stored = localStorage.getItem(DICT_STORAGE_KEY);
+            if (stored) {
+                try { return JSON.parse(stored); } catch { /* fallthrough */ }
+            }
+            return JSON.parse(JSON.stringify(DEFAULT_DICTIONARIES));
+        }
+
+        function dictSave(data) {
+            localStorage.setItem(DICT_STORAGE_KEY, JSON.stringify(data));
+        }
+
+        // Sanitize: trim + loại khoảng trắng thừa trong mảng keyword
+        function sanitizeKeywords(csvStr) {
+            return csvStr.split(',').map(k => k.trim()).filter(Boolean);
+        }
+
+        // Edge Case 2: Kiểm tra giao nhau giữa các mảng keyword
+        function validateDictIntersection(dict) {
+            const fields = ['sold_to_keys', 'ship_to_keys', 'po_number_keys', 'store_keys', 'material_keys', 'date_keys'];
+            const errors = [];
+            for (let i = 0; i < fields.length; i++) {
+                for (let j = i + 1; j < fields.length; j++) {
+                    const a = new Set((dict[fields[i]] || []).map(k => k.toLowerCase()));
+                    const b = new Set((dict[fields[j]] || []).map(k => k.toLowerCase()));
+                    const intersect = [...a].filter(k => b.has(k));
+                    if (intersect.length > 0) {
+                        errors.push(`"${fields[i]}" và "${fields[j]}" cùng có keyword: ${intersect.join(', ')}`);
+                    }
+                }
+            }
+            return errors;
+        }
+
+        // Render list dictionary trong modal
+        function dictRenderList() {
+            const list = document.getElementById('dictVendorList');
+            if (!list) return;
+            const data = dictLoad();
+            list.innerHTML = '';
+            data.forEach((dict, idx) => {
+                const row = document.createElement('div');
+                row.className = 'p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex flex-col gap-3';
+                const fields = [
+                    { key: 'sold_to_keys',   label: '👤 Mã Sold (Bên Đặt Hàng)' },
+                    { key: 'ship_to_keys',   label: '🏢 Mã Ship (Giao Hàng)' },
+                    { key: 'po_number_keys', label: '📋 Số PO (po_number)' },
+                    { key: 'store_keys',     label: '🏪 Mã Store (store_raw_info)' },
+                    { key: 'material_keys',  label: '📦 Mã SP (raw_article_code)' },
+                    { key: 'date_keys',      label: '📅 Hạn PO (po_date_raw)' },
+                ];
+                row.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-sm text-slate-800 dark:text-slate-100">
+                            ${dict.vendor_chain === 'DEFAULT' ? '🌐 ' : '🏬 '}${dict.vendor_chain}
+                        </span>
+                        <div class="flex gap-2 items-center">
+                            <label class="flex items-center gap-1 text-xs text-slate-500 cursor-pointer">
+                                <input type="checkbox" class="dict-active" data-idx="${idx}" ${dict.is_active ? 'checked' : ''}> Bật
+                            </label>
+                            ${dict.vendor_chain !== 'DEFAULT' ? `<button onclick="dictDelete(${idx})" class="text-xs text-red-400 hover:text-red-600">🗑</button>` : ''}
+                        </div>
+                    </div>
+                    ${fields.map(f => `
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">${f.label}</label>
+                            <input type="text" data-idx="${idx}" data-field="${f.key}"
+                                value="${(dict[f.key] || []).join(', ')}"
+                                class="dict-field text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-primary">
+                        </div>
+                    `).join('')}
+                `;
+                list.appendChild(row);
+            });
+
+            // Bind active checkbox
+            list.querySelectorAll('.dict-active').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const data = dictLoad();
+                    data[+cb.dataset.idx].is_active = cb.checked;
+                    dictSave(data);
+                });
+            });
+        }
+
+        function dictAddVendor() {
+            const name = (document.getElementById('dictNewChain')?.value || '').trim();
+            if (!name) { showToast('error', 'Vui lòng nhập tên chuỗi siêu thị.', 'Dictionary'); return; }
+            const data = dictLoad();
+            if (data.find(d => d.vendor_chain.toLowerCase() === name.toLowerCase())) {
+                showToast('error', `"${name}" đã tồn tại trong từ điển.`, 'Dictionary');
+                return;
+            }
+            data.push({ vendor_chain: name, is_active: true, sold_to_keys: [], ship_to_keys: [], po_number_keys: [], store_keys: [], material_keys: [], date_keys: [] });
+            dictSave(data);
+            document.getElementById('dictNewChain').value = '';
+            dictRenderList();
+        }
+
+        function dictDelete(idx) {
+            if (!confirm('Xóa cấu hình này?')) return;
+            const data = dictLoad();
+            data.splice(idx, 1);
+            dictSave(data);
+            dictRenderList();
+        }
+
+        function dictSaveAll() {
+            const data = dictLoad();
+            // Collect values from form fields
+            document.querySelectorAll('.dict-field').forEach(input => {
+                const idx   = +input.dataset.idx;
+                const field = input.dataset.field;
+                data[idx][field] = sanitizeKeywords(input.value);
+            });
+            // Validate intersections
+            let allErrors = [];
+            data.forEach(d => {
+                const errs = validateDictIntersection(d);
+                if (errs.length) allErrors.push(`[${d.vendor_chain}]: ${errs.join('; ')}`);
+            });
+            if (allErrors.length > 0) {
+                showToast('error', 'Có keyword trùng giữa các loại nhãn:\n' + allErrors.join('\n'), 'Dictionary');
+                return;
+            }
+            dictSave(data);
+            document.getElementById('dictModal').classList.add('hidden');
+            showToast('success', 'Đã lưu từ điển thành công.', 'Dictionary');
+        }
+
+        // Build dynamic dictionary block for injection into prompt
+        function buildDynamicPrompt(vendorChain) {
+            const all = dictLoad();
+            const dict = (vendorChain
+                ? all.find(d => d.is_active && d.vendor_chain.toLowerCase() === vendorChain.toLowerCase())
+                : null) || all.find(d => d.vendor_chain === 'DEFAULT' && d.is_active) || null;
+
+            if (!dict) return '';
+
+            return `
+TỪ ĐIỂN NHẬN DIỆN TRƯỜNG THÔNG TIN (${dict.vendor_chain}):
+- Gán vào trường JSON \`sold_to_hint\` (Bên Đặt Hàng): Tìm nhãn sau: ${(dict.sold_to_keys||[]).join(', ')}. Lấy TOÀN BỘ text đi sau.
+- Gán vào trường JSON \`store_raw_info\` (Bên Nhận Hàng): Tìm nhãn sau: ${[...(dict.ship_to_keys||[]), ...(dict.store_keys||[])].filter(Boolean).join(', ')}. Lấy TOÀN BỘ text đi sau.
+- Gán vào trường JSON \`po_number\` (Số PO): Tìm nhãn sau: ${(dict.po_number_keys||[]).join(', ')}.
+- Gán vào trường JSON \`raw_article_code\` (Mã SP): Tìm nhãn sau: ${(dict.material_keys||[]).join(', ')}.
+- Gán vào trường JSON \`po_date_raw\` (Hạn PO): Tìm nhãn sau: ${(dict.date_keys||[]).join(', ')}.
+`.trim();
+        }
+
+        // ================================================================
+        // MODULE 2: EXTRACTION LOGGER (IndexedDB) + ANALYTICS DASHBOARD
+        // ================================================================
+        const ExtractionLogger = {
+            DB_NAME: 'o2c_extraction_logs',
+            DB_VER: 1,
+
+            async open() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(this.DB_NAME, this.DB_VER);
+                    req.onupgradeneeded = e => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('logs')) {
+                            const store = db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
+                            store.createIndex('timestamp', 'timestamp');
+                            store.createIndex('status', 'status');
+                        }
+                    };
+                    req.onsuccess = e => resolve(e.target.result);
+                    req.onerror   = e => reject(e.target.error);
+                });
+            },
+
+            async log(entry) {
+                const db   = await this.open();
+                const tx   = db.transaction('logs', 'readwrite');
+                const store = tx.objectStore('logs');
+                store.add({ ...entry, timestamp: new Date().toISOString() });
+                return new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror    = e => reject(e.target.error);
+                });
+            },
+
+            async getAll() {
+                const db = await this.open();
+                const tx = db.transaction('logs', 'readonly');
+                return new Promise((resolve, reject) => {
+                    const req = tx.objectStore('logs').getAll();
+                    req.onsuccess = e => resolve(e.target.result.reverse()); // newest first
+                    req.onerror   = e => reject(e.target.error);
+                });
+            },
+        };
+
+        // Helper: log an extraction event after processing
+        async function logExtraction(entry) {
+            try {
+                // Determine status
+                const allRows = entry.rows || [];
+                const hasUnmatched = allRows.some(r => r.Status && r.Status !== 'Extracted');
+                const status = entry.ocrError ? 'FAILED_OCR'
+                    : hasUnmatched ? 'UNMATCHED_DATA' : 'SUCCESS';
+
+                await ExtractionLogger.log({
+                    file_name     : entry.fileName || 'Unknown',
+                    customer_name : entry.customerName || '—',
+                    row_count     : allRows.length,
+                    process_time  : entry.processTime || 0,
+                    cost_vnd      : entry.costVnd || 0,
+                    status,
+                    rows_snapshot : JSON.stringify(allRows.slice(0, 3)), // store first 3 rows as preview
+                });
+            } catch (e) {
+                console.warn('[Logger] Không lưu được log:', e.message);
+            }
+        }
+
+        // ===== ANALYTICS PAGE STATE =====
+        let _analyticsCurrentPage = 1;
+        const ANALYTICS_PAGE_SIZE = 10;
+
+        function analyticsPage(delta) {
+            _analyticsCurrentPage = Math.max(1, _analyticsCurrentPage + delta);
+            analyticsRender();
+        }
+
+        // Compute growth percentage safely
+        function calcGrowth(current, previous) {
+            if (previous === 0 && current > 0) return 100;
+            if (previous === 0) return 0;
+            return Math.round(((current - previous) / previous) * 100);
+        }
+
+        function growthBadge(pct) {
+            if (pct === 0) return `<span class="text-slate-400">±0%</span>`;
+            const cls = pct > 0 ? 'text-emerald-600' : 'text-red-500';
+            const arrow = pct > 0 ? '▲' : '▼';
+            return `<span class="${cls}">${arrow} ${Math.abs(pct)}% so kỳ trước</span>`;
+        }
+
+        const STATUS_CONFIG = {
+            'SUCCESS'       : { label: 'Hoàn thành', cls: 'bg-emerald-100 text-emerald-800' },
+            'UNMATCHED_DATA': { label: 'Lỗi Mapping', cls: 'bg-amber-100 text-amber-800' },
+            'FAILED_OCR'    : { label: 'Lỗi ảnh', cls: 'bg-red-100 text-red-800' },
+        };
+
+        async function analyticsRender() {
+            const filterStatus = document.getElementById('filterStatus')?.value || '';
+            let logs = [];
+            try { logs = await ExtractionLogger.getAll(); } catch(e) { /* ignore */ }
+
+            // ---- COMPUTE STATS ----
+            const now   = new Date();
+            const tz    = 'Asia/Ho_Chi_Minh';
+            const toLocalDate = ts => new Date(ts).toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+
+            const todayStr = now.toLocaleDateString('en-CA', { timeZone: tz });
+            const thisWeekStart = new Date(now);
+            thisWeekStart.setDate(now.getDate() - now.getDay());
+            const thisMonthStr = todayStr.substring(0, 7); // YYYY-MM
+
+            const yesterdayStr = new Date(now - 86400000).toLocaleDateString('en-CA', { timeZone: tz });
+            const lastWeekStart = new Date(thisWeekStart - 7 * 86400000);
+            const lastMonthStr = (() => {
+                const d = new Date(now); d.setMonth(d.getMonth() - 1);
+                return d.toLocaleDateString('en-CA', { timeZone: tz }).substring(0, 7);
+            })();
+
+            const todayLogs     = logs.filter(l => toLocalDate(l.timestamp) === todayStr);
+            const yesterdayLogs = logs.filter(l => toLocalDate(l.timestamp) === yesterdayStr);
+            const weekLogs      = logs.filter(l => new Date(l.timestamp) >= thisWeekStart);
+            const lastWeekLogs  = logs.filter(l => {
+                const d = new Date(l.timestamp);
+                return d >= lastWeekStart && d < thisWeekStart;
+            });
+            const monthLogs     = logs.filter(l => toLocalDate(l.timestamp).startsWith(thisMonthStr));
+            const lastMonthLogs = logs.filter(l => toLocalDate(l.timestamp).startsWith(lastMonthStr));
+
+            const avgTime = logs.length
+                ? (logs.reduce((s, l) => s + (l.process_time || 0), 0) / logs.length).toFixed(1)
+                : 0;
+
+            // Update stat cards
+            const setEl = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+            const setHTML = (id, val) => { const el = document.getElementById(id); if(el) el.innerHTML = val; };
+            setEl('statToday', todayLogs.length);
+            setHTML('statTodayGrowth', growthBadge(calcGrowth(todayLogs.length, yesterdayLogs.length)));
+            setEl('statWeek', weekLogs.length);
+            setHTML('statWeekGrowth', growthBadge(calcGrowth(weekLogs.length, lastWeekLogs.length)));
+            setEl('statMonth', monthLogs.length);
+            setHTML('statMonthGrowth', growthBadge(calcGrowth(monthLogs.length, lastMonthLogs.length)));
+            setEl('statAvgTime', `${avgTime}s`);
+            setEl('statAvgTimeDiff', logs.length ? `Dựa trên ${logs.length} lần trích xuất` : '');
+
+            // ---- FILTER + PAGINATE ----
+            const filtered = filterStatus ? logs.filter(l => l.status === filterStatus) : logs;
+            const total    = filtered.length;
+            const totalPg  = Math.max(1, Math.ceil(total / ANALYTICS_PAGE_SIZE));
+            _analyticsCurrentPage = Math.min(_analyticsCurrentPage, totalPg);
+
+            const page = filtered.slice(
+                (_analyticsCurrentPage - 1) * ANALYTICS_PAGE_SIZE,
+                _analyticsCurrentPage * ANALYTICS_PAGE_SIZE,
+            );
+
+            const tbody = document.getElementById('analyticsTableBody');
+            if (!tbody) return;
+
+            if (page.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="py-10 text-center text-slate-400 text-sm"><span class="material-symbols-outlined text-4xl block mb-2">search_off</span>Không có dữ liệu.</td></tr>`;
+            } else {
+                tbody.innerHTML = page.map(log => {
+                    const cfg    = STATUS_CONFIG[log.status] || { label: log.status, cls: 'bg-slate-100 text-slate-700' };
+                    const dt     = new Date(log.timestamp).toLocaleString('vi-VN', { timeZone: tz });
+                    const canRetry = log.status !== 'SUCCESS';
+                    return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td class="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">${dt}</td>
+                        <td class="px-5 py-3 text-sm font-medium text-slate-800 dark:text-slate-200 max-w-[160px] truncate" title="${log.file_name}">${log.file_name}</td>
+                        <td class="px-5 py-3 text-sm text-slate-600 dark:text-slate-400">${log.customer_name}</td>
+                        <td class="px-5 py-3 text-right font-bold text-slate-900 dark:text-slate-100">${log.row_count}</td>
+                        <td class="px-5 py-3 text-right text-slate-600">${log.process_time?.toFixed(1) || '—'}s</td>
+                        <td class="px-5 py-3 text-right text-slate-600">${(log.cost_vnd || 0).toLocaleString('vi-VN')}</td>
+                        <td class="px-5 py-3 text-center">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${cfg.cls}">${cfg.label}</span>
+                        </td>
+                        <td class="px-5 py-3 text-center">
+                            <button onclick="logViewDetail(${log.id})" class="text-xs px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800" title="Xem chi tiết">
+                                <span class="material-symbols-outlined text-sm align-middle">visibility</span>
+                            </button>
+                            ${canRetry ? `<button onclick="showToast('success','Đang xử lý lại...','Retry')" class="ml-1 text-xs px-2 py-0.5 rounded border border-amber-200 text-amber-600 hover:bg-amber-50" title="Gửi lại">
+                                <span class="material-symbols-outlined text-sm align-middle">refresh</span>
+                            </button>` : ''}
+                        </td>
+                    </tr>`;
+                }).join('');
+            }
+
+            // Paging labels
+            setEl('analyticsPagingLabel', total > 0
+                ? `Hiển thị ${(_analyticsCurrentPage-1)*ANALYTICS_PAGE_SIZE+1}–${Math.min(_analyticsCurrentPage*ANALYTICS_PAGE_SIZE,total)} / ${total} bản ghi`
+                : 'Không có bản ghi');
+            const prevBtn = document.getElementById('analyticsPrevBtn');
+            const nextBtn = document.getElementById('analyticsNextBtn');
+            if(prevBtn) prevBtn.disabled = _analyticsCurrentPage <= 1;
+            if(nextBtn) nextBtn.disabled = _analyticsCurrentPage >= totalPg;
+        }
+
+        async function logViewDetail(logId) {
+            const logs = await ExtractionLogger.getAll();
+            const log  = logs.find(l => l.id === logId);
+            if (!log) return;
+            const cfg = STATUS_CONFIG[log.status] || { label: log.status, cls: 'bg-slate-100 text-slate-700' };
+            const dt  = new Date(log.timestamp).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+            document.getElementById('logDetailTitle').textContent = `Chi tiết: ${log.file_name}`;
+            document.getElementById('logDetailBody').innerHTML = `
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div><span class="text-slate-500 text-xs">Thời gian</span><p class="font-bold">${dt}</p></div>
+                    <div><span class="text-slate-500 text-xs">Trạng thái</span><p><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${cfg.cls}">${cfg.label}</span></p></div>
+                    <div><span class="text-slate-500 text-xs">Khách hàng</span><p class="font-bold">${log.customer_name}</p></div>
+                    <div><span class="text-slate-500 text-xs">Số dòng</span><p class="font-bold">${log.row_count}</p></div>
+                    <div><span class="text-slate-500 text-xs">Thời gian xử lý</span><p class="font-bold">${log.process_time?.toFixed(1) || '—'}s</p></div>
+                    <div><span class="text-slate-500 text-xs">Chi phí</span><p class="font-bold text-emerald-600">${(log.cost_vnd||0).toLocaleString('vi-VN')} VNĐ</p></div>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-xs font-mono text-slate-600 dark:text-slate-400 overflow-auto max-h-48">
+                    <p class="font-bold text-slate-700 dark:text-slate-300 mb-1">3 dòng đầu (preview):</p>
+                    ${log.rows_snapshot || '—'}
+                </div>
+            `;
+            document.getElementById('logDetailModal').classList.remove('hidden');
+        }
+
+        // ================================================================
+        // TAB SWITCHING: extraction ↔ analytics
+        // ================================================================
+        function switchTab(tab) {
+            const extractionView  = document.querySelector('section.flex-1.flex.flex-col.bg-background-light');
+            const analyticsView   = document.getElementById('analyticsView');
+            const navBtns         = document.querySelectorAll('.tab-nav-btn');
+
+            // Reset all nav buttons
+            navBtns.forEach(btn => {
+                btn.classList.remove('text-primary', 'border-primary');
+                btn.classList.add('text-slate-500', 'border-transparent');
+            });
+
+            const activeBtn = document.querySelector(`.tab-nav-btn[data-tab="${tab}"]`);
+            if (activeBtn) {
+                activeBtn.classList.add('text-primary', 'border-primary');
+                activeBtn.classList.remove('text-slate-500', 'border-transparent');
+            }
+
+            if (tab === 'analytics') {
+                if (extractionView) extractionView.classList.add('hidden');
+                if (analyticsView) {
+                    analyticsView.classList.remove('hidden');
+                    analyticsView.classList.add('flex');
+                }
+                analyticsRender();
+            } else {
+                if (analyticsView) {
+                    analyticsView.classList.add('hidden');
+                    analyticsView.classList.remove('flex');
+                }
+                if (extractionView) extractionView.classList.remove('hidden');
+            }
+        }
+
     </script>
+
 </body>
 </html>
